@@ -6,8 +6,8 @@
   "license": "MIT",
   "private": false,
   "scripts": {
-    "dev": "bun run src/cli.ts --help",
-    "build": "bun build --target=node --format=esm --outfile dist/cli.js --banner=$'#!/usr/bin/env node\\n' src/cli.ts && chmod +x dist/cli.js",
+    "dev": "bun run src/cli.ts",
+    "build": "bun build --target=node --format=esm --outfile dist/cli.js src/cli.ts && bun run scripts/postbuild.ts",
     "prepublishOnly": "bun run build",
     "test": "bun test",
     "typecheck": "bunx tsc -p tsconfig.json --noEmit"
@@ -18,13 +18,22 @@
   "files": [
     "dist/cli.js",
     "README.md",
+    "CODE_OF_CONDUCT.md",
+    "CONTRIBUTING.md",
     "docs/",
     "LICENSE"
   ],
-  "devDependencies": {
-    "@types/bun": "latest"
+  "engines": {
+    "node": ">=18"
   },
-  "peerDependencies": {
-    "typescript": "^5"
+  "keywords": [
+    "codex",
+    "cli",
+    "openai",
+    "multi-account"
+  ],
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.9.3"
   }
 }
