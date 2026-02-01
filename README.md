@@ -16,6 +16,14 @@ See `POLYCODEX_PLAN.md` for details.
 - Build CLI bundle: `bun run build`
 - Output: `dist/cli.js`
 
+## npm (binary) distribution
+
+This package is published as a normal Node CLI (single npm package).
+
+Publish flow:
+- `bun run build`
+- `npm publish`
+
 ## Usage
 
 Create accounts (profiles):
