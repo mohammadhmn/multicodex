@@ -54,18 +54,29 @@ Use this for one-off commands where you don’t want to permanently switch your 
 
 ## Commands
 
-### Accounts (profiles)
+### Accounts
 
-- `polycodex profile add <name>`: create an account entry (no login happens yet)
-- `polycodex profile use <name>`: sets the default account and applies its auth snapshot to `~/.codex/auth.json`
-- `polycodex profile list/current/rm`: manage accounts
+- `polycodex accounts add <name>`: create an account entry (no login happens yet)
+- `polycodex accounts list`: list accounts (with cached status/metadata)
+- `polycodex accounts use <name>`: set default account and apply its auth snapshot to `~/.codex/auth.json`
+- `polycodex accounts current`: print current account
+- `polycodex accounts import [<name>]`: snapshot current `~/.codex/auth.json` into an account
 
-### Auth utilities
+Aliases: `ls`, `add`, `rm`, `rename`, `use`, `switch`, `current`, `which`, `import`.
 
-- `polycodex auth import [--account <name>]`
-  - Copies current `~/.codex/auth.json` into the account snapshot (does not modify `~/.codex/auth.json`).
-- `polycodex auth apply <name>`
-  - Writes the account snapshot into `~/.codex/auth.json` (switches what plain `codex` will use next).
+### Running codex
+
+- `polycodex`: runs interactive `codex` using the current account
+- `polycodex run [<name>] -- <codex args...>`: run `codex` for an account
+- `polycodex run --temp -- ...`: run without changing your default login
+
+### Quota (best-effort)
+
+Weekly/sessions quota is not exposed via a stable public API for OAuth.
+
+- `polycodex quota [<name>]`: shows a saved note (if any) or “unknown”
+- `polycodex quota open [<name>]`: opens the ChatGPT UI so you can check quota
+- `polycodex quota set [<name>] <note...>`: store a manual quota note
 
 ## Requirements
 

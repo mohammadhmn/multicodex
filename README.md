@@ -21,22 +21,29 @@ Requirements:
 ## Usage
 
 Create accounts:
-- `polycodex profile add work`
-- `polycodex profile add personal`
+- `polycodex accounts add work`
+- `polycodex accounts add personal`
 
 Login per account (stores per-account auth snapshots):
 - `polycodex login --account work`
 - `polycodex login --account personal`
 
 Switch default account:
-- `polycodex profile use work`
+- `polycodex accounts use work`
 
 Run Codex using current account:
 - `polycodex`
 - `polycodex exec -m o3 "do the thing"`
 
 Run a one-off command without switching your default login:
-- `polycodex run --account personal --restore -- codex login status`
+- `polycodex run personal --temp -- codex login status`
+
+See accounts at a glance:
+- `polycodex accounts` (alias: `polycodex ls`)
+
+Quota (best-effort):
+- `polycodex quota work`
+- `polycodex quota open work`
 
 ## Development
 
