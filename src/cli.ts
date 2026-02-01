@@ -1,34 +1,62 @@
+import fs from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+
 import { loadConfig, resolveAccountName } from "./config";
-import { addAccount, currentAccount, listAccounts, removeAccount, useAccount } from "./profiles";
+import {
+  addAccount,
+  currentAccount,
+  listAccounts,
+  removeAccount,
+  renameAccount,
+  useAccount,
+} from "./profiles";
 import { applyAccountAuthToDefault, importDefaultAuthToAccount } from "./authSwap";
-import { runCodex } from "./runCodex";
+import { runCodex, runCodexCapture } from "./runCodex";
+import { accountAuthPath } from "./paths";
+import { readAccountMeta, updateAccountMeta } from "./accountMeta";
 
 function printHelp(): void {
-  // Keep this concise; README is the main docs.
-  console.log(`polycodex - multi-account wrapper for Codex CLI
+  console.log(`polycodex - manage multiple Codex accounts (OAuth)
 
 Usage:
-  polycodex profile add <name>
-  polycodex profile list
-  polycodex profile use <name>
-  polycodex profile current
-  polycodex profile rm <name> [--delete-data]
+  polycodex accounts list
+  polycodex accounts add <name>
+  polycodex accounts remove <name> [--delete-data]
+  polycodex accounts rename <old> <new>
+  polycodex accounts use <name>
+  polycodex accounts current
+  polycodex accounts import [<name>]
 
-  polycodex auth import [--account <name>]
-  polycodex auth apply <name> [--force]
+Aliases:
+  polycodex accounts            (list)
+  polycodex ls                  (accounts list)
+  polycodex add <name>          (accounts add)
+  polycodex rm <name>           (accounts remove)
+  polycodex rename <old> <new>  (accounts rename)
+  polycodex use <name>          (accounts use)
+  polycodex switch <name>       (accounts use)
+  polycodex current             (accounts current)
+  polycodex which               (accounts current)
+  polycodex import [<name>]     (accounts import)
 
-  polycodex login  [--account <name>] [--] <codex login args...>
-  polycodex logout [--account <name>] [--] <codex logout args...>
-  polycodex status [--account <name>]
+Run Codex:
+  polycodex                     (launch codex with current account)
+  polycodex run [<name>] [--temp] [--force] -- <codex args...>
+  polycodex <codex args...>     (passthrough using current account)
 
-  polycodex run [--account <name>] [--force] [--restore] -- <codex args...>
+Status:
+  polycodex status [<name>]
+  polycodex whoami              (alias)
 
-Passthrough:
-  polycodex <codex args...>    (runs codex using the current account)
+Quota (best-effort):
+  polycodex quota [<name>]
+  polycodex quota open [<name>]
+  polycodex quota set [<name>] <note...>
+  polycodex quota clear [<name>]
 
 Notes:
-  - Use --account for polycodex account selection. Codex itself uses --profile, so polycodex avoids that flag.
-  - polycodex only swaps ~/.codex/auth.json; everything else remains in ~/.codex (rules, skills, config, sessions, history).
+  - polycodex swaps ~/.codex/auth.json under a lock; everything else stays in ~/.codex.
+  - Quota (weekly/sessions) is not exposed via a stable public API; polycodex stores notes and can open the UI.
 `);
 }
 
@@ -59,56 +87,109 @@ function splitAtDoubleDash(args: string[]): { before: string[]; after: string[] 
   return { before: args.slice(0, idx), after: args.slice(idx + 1) };
 }
 
-async function cmdProfile(rest: string[]): Promise<void> {
-  const [action, ...tail] = rest;
-  if (!action) die("Missing profile action. Try `polycodex profile list`.");
+async function fileExists(p: string): Promise<boolean> {
+  try {
+    await fs.stat(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function openUrl(url: string): void {
+  const platform = process.platform;
+  if (platform === "darwin") {
+    spawnSync("open", [url], { stdio: "inherit" });
+    return;
+  }
+  if (platform === "win32") {
+    spawnSync("cmd", ["/c", "start", "", url], { stdio: "inherit" });
+    return;
+  }
+  spawnSync("xdg-open", [url], { stdio: "inherit" });
+}
+
+async function resolveExistingAccount(requested?: string): Promise<string> {
+  const config = await loadConfig();
+  const name = resolveAccountName(config, requested);
+  if (!(name in config.accounts)) die(`Unknown account: ${name}`);
+  return name;
+}
+
+async function cmdAccounts(rest: string[]): Promise<void> {
+  const [actionRaw, ...tail] = rest;
+  const action = actionRaw ?? "list";
 
   if (action === "list") {
     const { accounts } = await listAccounts();
     if (!accounts.length) {
-      console.log("No accounts configured.");
+      console.log("No accounts configured. Run: polycodex accounts add <name>");
       return;
     }
+
     for (const a of accounts) {
-      console.log(`${a.isCurrent ? "*" : " "} ${a.name}`);
+      const meta = await readAccountMeta(a.name);
+      const hasAuth = await fileExists(accountAuthPath(a.name));
+      const status = meta?.lastLoginStatus ? meta.lastLoginStatus : hasAuth ? "auth saved" : "no auth";
+      const last = meta?.lastUsedAt ?? "never";
+      const quota = meta?.quotaNote ? `  quota: ${meta.quotaNote}` : "";
+      console.log(`${a.isCurrent ? "*" : " "} ${a.name}  ${status}  last used: ${last}${quota}`);
     }
     return;
   }
 
   if (action === "add") {
     const name = tail[0];
-    if (!name) die("Missing account name. Usage: `polycodex profile add <name>`");
+    if (!name) die("Missing name. Usage: polycodex accounts add <name>");
     await addAccount({ name });
     console.log(`Added account: ${name}`);
     return;
   }
 
-  if (action === "use") {
+  if (action === "remove") {
     const name = tail[0];
-    if (!name) die("Missing account name. Usage: `polycodex profile use <name>`");
-    await useAccount(name);
-    await applyAccountAuthToDefault(name, false);
-    console.log(`Current account: ${name}`);
-    return;
-  }
-
-  if (action === "current") {
-    const name = await currentAccount();
-    if (!name) die("No current account set. Run `polycodex profile add <name>`.", 2);
-    console.log(name);
-    return;
-  }
-
-  if (action === "rm") {
-    const name = tail[0];
-    if (!name) die("Missing account name. Usage: `polycodex profile rm <name>`");
+    if (!name) die("Missing name. Usage: polycodex accounts remove <name>");
     const deleteData = popFlag(tail, "--delete-data");
     await removeAccount({ name, deleteData });
     console.log(`Removed account: ${name}`);
     return;
   }
 
-  die(`Unknown profile action: ${action}`);
+  if (action === "rename") {
+    const from = tail[0];
+    const to = tail[1];
+    if (!from || !to) die("Usage: polycodex accounts rename <old> <new>");
+    await renameAccount(from, to);
+    console.log(`Renamed account: ${from} -> ${to}`);
+    return;
+  }
+
+  if (action === "use") {
+    const name = tail[0];
+    if (!name) die("Missing name. Usage: polycodex accounts use <name>");
+    await useAccount(name);
+    await applyAccountAuthToDefault(name, false);
+    console.log(`Now using: ${name}`);
+    return;
+  }
+
+  if (action === "current") {
+    const name = await currentAccount();
+    if (!name) die("No current account set. Run: polycodex accounts add <name>", 2);
+    console.log(name);
+    return;
+  }
+
+  if (action === "import") {
+    const name = tail[0];
+    const account = await resolveExistingAccount(name);
+    await importDefaultAuthToAccount(account);
+    await updateAccountMeta(account, { lastUsedAt: new Date().toISOString() });
+    console.log(`Imported ~/.codex/auth.json into account: ${account}`);
+    return;
+  }
+
+  die(`Unknown accounts action: ${action}`);
 }
 
 async function runCodexWithAccount({
@@ -122,12 +203,11 @@ async function runCodexWithAccount({
   forceLock: boolean;
   restorePreviousAuth: boolean;
 }): Promise<void> {
-  const config = await loadConfig();
-  const resolvedAccount = resolveAccountName(config, account);
-  if (!(resolvedAccount in config.accounts)) die(`Unknown account: ${resolvedAccount}`);
+  const resolved = await resolveExistingAccount(account);
+  await updateAccountMeta(resolved, { lastUsedAt: new Date().toISOString() });
 
   const exitCode = await runCodex({
-    account: resolvedAccount,
+    account: resolved,
     codexArgs,
     forceLock,
     restorePreviousAuth,
@@ -135,56 +215,116 @@ async function runCodexWithAccount({
   process.exit(exitCode);
 }
 
-async function cmdLogin(rest: string[]): Promise<void> {
-  const { before, after } = splitAtDoubleDash(rest);
-  const account = popFlagValue(before, "--account");
-  const codexArgs = ["login", ...before, ...after];
-  await runCodexWithAccount({ account, codexArgs, forceLock: false, restorePreviousAuth: false });
-}
-
-async function cmdLogout(rest: string[]): Promise<void> {
-  const { before, after } = splitAtDoubleDash(rest);
-  const account = popFlagValue(before, "--account");
-  const codexArgs = ["logout", ...before, ...after];
-  await runCodexWithAccount({ account, codexArgs, forceLock: false, restorePreviousAuth: false });
-}
-
-async function cmdStatus(rest: string[]): Promise<void> {
-  const account = popFlagValue(rest, "--account");
-  const codexArgs = ["login", "status", ...rest];
-  // Status should not change the currently-active default auth by default.
-  await runCodexWithAccount({ account, codexArgs, forceLock: false, restorePreviousAuth: true });
-}
-
 async function cmdRun(rest: string[]): Promise<void> {
   const { before, after } = splitAtDoubleDash(rest);
   if (!rest.includes("--")) {
-    die("`polycodex run` requires `--` before codex args. Example: polycodex run -- codex --help");
+    die("Usage: polycodex run [<name>] [--temp] [--force] -- <codex args...>");
   }
-  const account = popFlagValue(before, "--account");
+
+  // Support both positional account and --account.
+  const accountFlag = popFlagValue(before, "--account");
+  const positional = before[0] && !before[0].startsWith("-") ? before.shift() : undefined;
+  const account = accountFlag ?? positional;
+
   const force = popFlag(before, "--force");
-  const restore = popFlag(before, "--restore");
+  const temp = popFlag(before, "--temp") || popFlag(before, "--restore");
   if (before.length) die(`Unknown polycodex flag(s): ${before.join(" ")}`);
+
   await runCodexWithAccount({
     account,
     codexArgs: after,
     forceLock: force,
-    restorePreviousAuth: restore,
+    restorePreviousAuth: temp,
   });
 }
 
-async function cmdAuth(rest: string[]): Promise<void> {
+async function cmdStatus(rest: string[]): Promise<void> {
+  const args = rest.slice();
+  const accountFlag = popFlagValue(args, "--account");
+  const positional = args[0] && !args[0].startsWith("-") ? args[0] : undefined;
+  const account = await resolveExistingAccount(accountFlag ?? positional);
+
+  const result = await runCodexCapture({
+    account,
+    codexArgs: ["login", "status"],
+    forceLock: false,
+    restorePreviousAuth: true,
+  });
+
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
+  const output = (result.stdout + result.stderr).trim();
+
+  await updateAccountMeta(account, {
+    lastUsedAt: new Date().toISOString(),
+    lastLoginStatus: output || undefined,
+    lastLoginCheckedAt: new Date().toISOString(),
+  });
+
+  process.exit(result.exitCode);
+}
+
+async function cmdQuota(rest: string[]): Promise<void> {
+  const [sub, ...restTail] = rest;
+  const known = new Set(["open", "set", "clear"]);
+  const action = sub && known.has(sub) ? sub : "show";
+  const tail = action === "show" ? (sub ? [sub, ...restTail] : restTail) : restTail;
+
+  const resolveNameMaybe = async (): Promise<string> => {
+    const positional = tail[0] && !tail[0].startsWith("-") ? tail.shift() : undefined;
+    const flag = popFlagValue(tail, "--account");
+    return await resolveExistingAccount(flag ?? positional);
+  };
+
+  if (action === "open") {
+    const account = await resolveNameMaybe();
+    // Best-effort: weekly/sessions quota isn’t reliably available via public APIs.
+    // Open ChatGPT UI and let the user inspect usage/quota for that account.
+    console.log(`Open quota UI for account: ${account}`);
+    openUrl("https://chatgpt.com/");
+    return;
+  }
+
+  if (action === "set") {
+    const account = await resolveNameMaybe();
+    const note = tail.join(" ").trim();
+    if (!note) die("Usage: polycodex quota set [<name>] <note...>");
+    await updateAccountMeta(account, { quotaNote: note, lastUsedAt: new Date().toISOString() });
+    console.log(`Saved quota note for ${account}`);
+    return;
+  }
+
+  if (action === "clear") {
+    const account = await resolveNameMaybe();
+    await updateAccountMeta(account, { quotaNote: undefined, lastUsedAt: new Date().toISOString() });
+    console.log(`Cleared quota note for ${account}`);
+    return;
+  }
+
+  // show
+  const account = await resolveNameMaybe();
+  const meta = await readAccountMeta(account);
+  if (meta?.quotaNote) {
+    console.log(`${account}: ${meta.quotaNote}`);
+  } else {
+    console.log(`${account}: quota unknown (not available via stable public API).`);
+    console.log(`Try: polycodex quota open ${account}`);
+  }
+}
+
+async function cmdLegacyProfile(rest: string[]): Promise<void> {
+  // Back-compat: `profile` maps to `accounts`.
+  await cmdAccounts(rest);
+}
+
+async function cmdLegacyAuth(rest: string[]): Promise<void> {
+  // Back-compat: `auth import/apply` supported, but primary UX is `accounts import/use`.
   const [action, ...tail] = rest;
-  if (!action) die("Missing auth action. Try `polycodex auth import`.");
+  if (!action) die("Missing auth action.");
 
   if (action === "import") {
-    const account = popFlagValue(tail, "--account");
-    if (tail.length) die(`Unknown polycodex flag(s): ${tail.join(" ")}`);
-
-    const config = await loadConfig();
-    const resolved = resolveAccountName(config, account);
-    if (!(resolved in config.accounts)) die(`Unknown account: ${resolved}`);
-
+    const account = popFlagValue(tail, "--account") ?? tail[0];
+    const resolved = await resolveExistingAccount(account);
     await importDefaultAuthToAccount(resolved);
     console.log(`Imported ~/.codex/auth.json into account: ${resolved}`);
     return;
@@ -192,15 +332,15 @@ async function cmdAuth(rest: string[]): Promise<void> {
 
   if (action === "apply") {
     const name = tail[0];
-    if (!name) die("Missing account name. Usage: `polycodex auth apply <name>`");
-    const flags = tail.slice(1);
-    const force = popFlag(flags, "--force");
-    if (flags.length) die(`Unknown polycodex flag(s): ${flags.join(" ")}`);
-
-    const config = await loadConfig();
-    if (!(name in config.accounts)) die(`Unknown account: ${name}`);
-    await applyAccountAuthToDefault(name, force);
-    console.log(`Applied account auth to ~/.codex/auth.json: ${name}`);
+    if (!name) die("Missing account name. Usage: polycodex auth apply <name>");
+    const force = popFlag(tail, "--force");
+    if (tail.slice(1).length) {
+      const extra = tail.slice(1).filter((x) => x !== "--force");
+      if (extra.length) die(`Unknown flag(s): ${extra.join(" ")}`);
+    }
+    const resolved = await resolveExistingAccount(name);
+    await applyAccountAuthToDefault(resolved, force);
+    console.log(`Applied account auth to ~/.codex/auth.json: ${resolved}`);
     return;
   }
 
@@ -211,13 +351,12 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
   if (!args.length) {
-    // Launch codex interactive with current account.
     await runCodexWithAccount({ codexArgs: [], forceLock: false, restorePreviousAuth: false });
     return;
   }
 
-  const cmd = args[0]!;
-  const rest = args.slice(1);
+  const [cmd, ...rest] = args;
+  if (!cmd) return;
 
   if (cmd === "help" || cmd === "--help" || cmd === "-h") {
     printHelp();
@@ -225,49 +364,41 @@ async function main(): Promise<void> {
   }
 
   if (cmd === "--version" || cmd === "-V") {
+    // Keep in sync with package.json manually.
     console.log("polycodex 0.1.0");
     return;
   }
 
-  if (cmd === "profile") {
-    await cmdProfile(rest);
+  // Clear commands + aliases
+  if (cmd === "accounts" || cmd === "account") return await cmdAccounts(rest);
+  if (cmd === "ls") return await cmdAccounts(["list", ...rest]);
+  if (cmd === "add") return await cmdAccounts(["add", ...rest]);
+  if (cmd === "rm") return await cmdAccounts(["remove", ...rest]);
+  if (cmd === "rename") return await cmdAccounts(["rename", ...rest]);
+  if (cmd === "use" || cmd === "switch") return await cmdAccounts(["use", ...rest]);
+  if (cmd === "current" || cmd === "which") return await cmdAccounts(["current", ...rest]);
+  if (cmd === "import") return await cmdAccounts(["import", ...rest]);
+
+  if (cmd === "run") return await cmdRun(rest);
+  if (cmd === "status" || cmd === "whoami") return await cmdStatus(rest);
+  if (cmd === "quota") return await cmdQuota(rest);
+
+  // Legacy commands (keep for published compatibility)
+  if (cmd === "profile") return await cmdLegacyProfile(rest);
+  if (cmd === "auth") return await cmdLegacyAuth(rest);
+
+  // Passthrough to codex args using current account.
+  // `polycodex codex ...` drops the explicit "codex".
+  if (cmd === "codex") {
+    await runCodexWithAccount({ codexArgs: rest, forceLock: false, restorePreviousAuth: false });
     return;
   }
 
-  if (cmd === "login") {
-    await cmdLogin(rest);
-    return;
-  }
-
-  if (cmd === "logout") {
-    await cmdLogout(rest);
-    return;
-  }
-
-  if (cmd === "status") {
-    await cmdStatus(rest);
-    return;
-  }
-
-  if (cmd === "run") {
-    await cmdRun(rest);
-    return;
-  }
-
-  if (cmd === "auth") {
-    await cmdAuth(rest);
-    return;
-  }
-
-  // Passthrough to codex args (do not parse polycodex flags here to avoid conflicts with codex flags).
   await runCodexWithAccount({ codexArgs: args, forceLock: false, restorePreviousAuth: false });
 }
 
-await main().catch(async (error) => {
-  // Best-effort: avoid printing huge stacks by default.
+await main().catch((error) => {
   const message = error instanceof Error ? error.message : String(error);
   console.error(message);
-
-  // If shared-state lock was held, it gets released in finally blocks.
   process.exit(1);
 });
