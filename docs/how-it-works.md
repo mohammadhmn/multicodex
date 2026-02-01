@@ -78,6 +78,14 @@ Weekly/sessions quota is not exposed via a stable public API for OAuth.
 - `polycodex quota open [<name>]`: opens the ChatGPT UI so you can check quota
 - `polycodex quota set [<name>] <note...>`: store a manual quota note
 
+## Autocomplete
+
+`polycodex` can print shell completion scripts:
+
+- Bash: `polycodex completion bash`
+- Zsh: `polycodex completion zsh` (wraps bash completion via `bashcompinit`)
+- Fish: `polycodex completion fish`
+
 ## Requirements
 
 - `codex` must be installed and available in `PATH` (polycodex shells out to it).

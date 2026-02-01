@@ -8,6 +8,7 @@ import { applyAccountAuthToDefault, importDefaultAuthToAccount } from "./authSwa
 import { runCodex, runCodexCapture } from "./runCodex";
 import { accountAuthPath } from "./paths";
 import { readAccountMeta, updateAccountMeta } from "./accountMeta";
+import { completePolycodex } from "./completion";
 
 async function fileExists(p: string): Promise<boolean> {
   try {
@@ -309,6 +310,75 @@ quota
   .argument("[name]")
   .description("Show quota note or guidance")
   .action(async (name?: string) => quotaShowCommand(name));
+
+program
+  .command("completion <shell>")
+  .description("Print shell completion script (bash|zsh|fish)")
+  .action((shell: string) => {
+    if (shell === "bash") {
+      process.stdout.write(
+        [
+          "# bash completion for polycodex",
+          "",
+          "_polycodex_complete() {",
+          "  local IFS=$'\\n'",
+          "  local -a suggestions",
+          '  suggestions=($(polycodex __complete --cword "$COMP_CWORD" --current "$COMP_WORDS[$COMP_CWORD]" --words "${COMP_WORDS[@]}" 2>/dev/null))',
+          '  COMPREPLY=($(compgen -W "${suggestions[*]}" -- "$COMP_WORDS[$COMP_CWORD]"))',
+          "}",
+          "",
+          "complete -F _polycodex_complete polycodex",
+          "",
+        ].join("\n"),
+      );
+      return;
+    }
+    if (shell === "zsh") {
+      process.stdout.write(
+        [
+          "# zsh completion for polycodex (via bashcompinit)",
+          "autoload -U +X bashcompinit && bashcompinit",
+          "source <(polycodex completion bash)",
+          "",
+        ].join("\n"),
+      );
+      return;
+    }
+    if (shell === "fish") {
+      process.stdout.write(
+        [
+          "# fish completion for polycodex",
+          "function __polycodex_complete",
+          "  set -l words (commandline -opc)",
+          "  set -l cword (math (count $words) - 1)",
+          "  set -l cur (commandline -ct)",
+          "  polycodex __complete --cword $cword --current \"$cur\" --words $words",
+          "end",
+          "",
+          "complete -c polycodex -f -a \"(__polycodex_complete)\"",
+          "",
+        ].join("\n"),
+      );
+      return;
+    }
+    console.error("Unsupported shell. Use: bash, zsh, fish");
+    process.exit(2);
+  });
+
+// Hidden completion backend used by shell scripts.
+program
+  .command("__complete", { hidden: true })
+  .description("Internal completion command")
+  .requiredOption("--cword <n>", "current word index", (v: string) => Number.parseInt(v, 10))
+  .option("--current <s>", "current token")
+  .option("--words <words...>", "tokenized argv")
+  .action(async (opts: { cword: number; current?: string; words?: string[] }) => {
+    const words = opts.words ?? [];
+    const current = typeof opts.current === "string" ? opts.current : words[opts.cword] ?? "";
+    const suggestions = await completePolycodex({ words, cword: opts.cword, current });
+    process.stdout.write(suggestions.join("\n"));
+    if (suggestions.length) process.stdout.write("\n");
+  });
 
 // passthrough: any unknown command -> treat as codex args
 program

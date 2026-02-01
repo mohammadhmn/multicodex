@@ -45,6 +45,19 @@ Quota (best-effort):
 - `polycodex quota work`
 - `polycodex quota open work`
 
+## Autocomplete
+
+Bash:
+- `polycodex completion bash > ~/.polycodex-completion.bash`
+- Add to `~/.bashrc`: `source ~/.polycodex-completion.bash`
+
+Zsh:
+- `polycodex completion zsh > ~/.polycodex-completion.zsh`
+- Add to `~/.zshrc`: `source ~/.polycodex-completion.zsh`
+
+Fish:
+- `polycodex completion fish > ~/.config/fish/completions/polycodex.fish`
+
 ## Development
 
 - Install deps: `bun install`
