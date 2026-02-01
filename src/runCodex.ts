@@ -21,7 +21,15 @@ export async function runCodex(opts: RunCodexOptions): Promise<number> {
           stdio: "inherit",
           env: { ...process.env },
         });
-        child.on("error", reject);
+        child.on("error", (error) => {
+          const code = (error as NodeJS.ErrnoException | undefined)?.code;
+          if (code === "ENOENT") {
+            return reject(
+              new Error("`codex` not found in PATH. Install Codex CLI and try again."),
+            );
+          }
+          return reject(error);
+        });
         child.on("exit", (code, signal) => {
           if (typeof code === "number") return resolve(code);
           // If terminated by signal, follow common convention.
