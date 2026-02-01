@@ -4,7 +4,7 @@
 
 It reuses your default Codex home (`~/.codex`) for everything (rules, skills, config, sessions, history, etc) and only switches accounts by swapping `~/.codex/auth.json` under a lock.
 
-See `POLYCODEX_PLAN.md` for details.
+See `docs/how-it-works.md` for details.
 
 ## Install (local dev)
 

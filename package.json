@@ -18,7 +18,7 @@
   "files": [
     "dist/cli.js",
     "README.md",
-    "POLYCODEX_PLAN.md",
+    "docs/",
     "LICENSE"
   ],
   "devDependencies": {
