@@ -46,6 +46,8 @@ export async function completePolycodex(ctx: CompletionContext): Promise<string[
     "run",
     "status",
     "whoami",
+    "limits",
+    "usage",
     "codex",
     "completion",
     "help",
@@ -104,8 +106,8 @@ export async function completePolycodex(ctx: CompletionContext): Promise<string[
     return [];
   }
 
-  if (cmd0 === "status" || cmd0 === "whoami") {
-    const flags = ["--help", "-h"];
+  if (cmd0 === "status" || cmd0 === "whoami" || cmd0 === "limits" || cmd0 === "usage") {
+    const flags = cmd0 === "limits" || cmd0 === "usage" ? ["--force", "--help", "-h"] : ["--help", "-h"];
     if (cur.startsWith("-")) return uniqPrefixMatch(flags, cur);
     if (cword === 1) return uniqPrefixMatch(accountNames, cur);
     return [];
