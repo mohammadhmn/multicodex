@@ -3,11 +3,13 @@ import { Command } from "commander";
 
 import { loadConfig, resolveAccountName } from "./config";
 import { addAccount, currentAccount, listAccounts, removeAccount, renameAccount, useAccount } from "./profiles";
-import { applyAccountAuthToDefault, importDefaultAuthToAccount } from "./authSwap";
+import { applyAccountAuthToDefault, importDefaultAuthToAccount, withAccountAuth } from "./authSwap";
 import { runCodex, runCodexCapture } from "./runCodex";
 import { accountAuthPath } from "./paths";
 import { readAccountMeta, updateAccountMeta } from "./accountMeta";
 import { completePolycodex } from "./completion";
+import { fetchRateLimitsViaRpc } from "./codexRpc";
+import { formatRateLimits } from "./limits";
 
 async function fileExists(p: string): Promise<boolean> {
   try {
@@ -78,6 +80,13 @@ async function statusCommand(name?: string): Promise<never> {
   });
 
   process.exit(result.exitCode);
+}
+
+async function limitsForAccount(account: string, forceLock: boolean): Promise<string[]> {
+  return await withAccountAuth(
+    { account, forceLock, restorePreviousAuth: true },
+    async () => await fetchRateLimitsViaRpc(),
+  ).then(formatRateLimits);
 }
 
 const program = new Command();
@@ -250,6 +259,43 @@ program
   .description("Alias for `status`")
   .action(async (name?: string) => {
     await statusCommand(name);
+  });
+
+// limits
+program
+  .command("limits [name]")
+  .alias("usage")
+  .description("Show usage limits via Codex RPC")
+  .option("--force", "reclaim a stale lock")
+  .action(async (name: string | undefined, opts: { force?: boolean }) => {
+    const forceLock = Boolean(opts.force);
+    const targets = name
+      ? [await resolveExistingAccount(name)]
+      : (await listAccounts()).accounts.map((a) => a.name);
+
+    if (!targets.length) {
+      console.log("No accounts configured. Run: polycodex accounts add <name>");
+      return;
+    }
+
+    let hadError = false;
+    for (const account of targets) {
+      try {
+        const lines = await limitsForAccount(account, forceLock);
+        if (targets.length > 1) {
+          console.log(`${account}:`);
+          for (const line of lines) console.log(`  ${line}`);
+          console.log("");
+        } else {
+          for (const line of lines) console.log(line);
+        }
+      } catch (error) {
+        hadError = true;
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`${account}: ${message}`);
+      }
+    }
+    if (hadError) process.exitCode = 1;
   });
 
 program
