@@ -1,5 +1,4 @@
 import fs from "node:fs/promises";
-import { spawnSync } from "node:child_process";
 import { Command } from "commander";
 
 import { loadConfig, resolveAccountName } from "./config";
@@ -17,19 +16,6 @@ async function fileExists(p: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-function openUrl(url: string): void {
-  const platform = process.platform;
-  if (platform === "darwin") {
-    spawnSync("open", [url], { stdio: "inherit" });
-    return;
-  }
-  if (platform === "win32") {
-    spawnSync("cmd", ["/c", "start", "", url], { stdio: "inherit" });
-    return;
-  }
-  spawnSync("xdg-open", [url], { stdio: "inherit" });
 }
 
 async function resolveExistingAccount(requested?: string): Promise<string> {
@@ -68,8 +54,7 @@ async function listAccountsCommand(): Promise<void> {
     const hasAuth = await fileExists(accountAuthPath(a.name));
     const status = meta?.lastLoginStatus ? meta.lastLoginStatus : hasAuth ? "auth saved" : "no auth";
     const last = meta?.lastUsedAt ?? "never";
-    const quota = meta?.quotaNote ? `  quota: ${meta.quotaNote}` : "";
-    console.log(`${a.isCurrent ? "*" : " "} ${a.name}  ${status}  last used: ${last}${quota}`);
+    console.log(`${a.isCurrent ? "*" : " "} ${a.name}  ${status}  last used: ${last}`);
   }
 }
 
@@ -93,37 +78,6 @@ async function statusCommand(name?: string): Promise<never> {
   });
 
   process.exit(result.exitCode);
-}
-
-async function quotaShowCommand(name?: string): Promise<void> {
-  const account = await resolveExistingAccount(name);
-  const meta = await readAccountMeta(account);
-  if (meta?.quotaNote) {
-    console.log(`${account}: ${meta.quotaNote}`);
-  } else {
-    console.log(`${account}: quota unknown (not available via stable public API).`);
-    console.log(`Try: polycodex quota open ${account}`);
-  }
-}
-
-async function quotaOpenCommand(name?: string): Promise<void> {
-  const account = await resolveExistingAccount(name);
-  console.log(`Open quota UI for account: ${account}`);
-  openUrl("https://chatgpt.com/");
-}
-
-async function quotaSetCommand(name: string | undefined, noteParts: string[]): Promise<void> {
-  const account = await resolveExistingAccount(name);
-  const note = noteParts.join(" ").trim();
-  if (!note) throw new Error("Usage: polycodex quota set [<name>] <note...>");
-  await updateAccountMeta(account, { quotaNote: note, lastUsedAt: new Date().toISOString() });
-  console.log(`Saved quota note for ${account}`);
-}
-
-async function quotaClearCommand(name?: string): Promise<void> {
-  const account = await resolveExistingAccount(name);
-  await updateAccountMeta(account, { quotaNote: undefined, lastUsedAt: new Date().toISOString() });
-  console.log(`Cleared quota note for ${account}`);
 }
 
 const program = new Command();
@@ -298,19 +252,6 @@ program
     await statusCommand(name);
   });
 
-// quota
-const quota = program.command("quota").description("Quota helpers (best-effort)");
-quota.command("open [name]").description("Open the quota UI page").action(quotaOpenCommand);
-quota
-  .command("set [name] <note...>")
-  .description("Store a manual quota note")
-  .action(async (name: string | undefined, note: string[]) => quotaSetCommand(name, note));
-quota.command("clear [name]").description("Clear quota note").action(quotaClearCommand);
-quota
-  .argument("[name]")
-  .description("Show quota note or guidance")
-  .action(async (name?: string) => quotaShowCommand(name));
-
 program
   .command("completion <shell>")
   .description("Print shell completion script (bash|zsh|fish)")
@@ -394,14 +335,6 @@ async function main(): Promise<void> {
   if (argv.length === 0) {
     // Default behavior: show polycodex info (do not start a codex session).
     await listAccountsCommand();
-    return;
-  }
-
-  // If user passes something that isn't a known command, treat it as codex passthrough.
-  const known = new Set(program.commands.map((c) => c.name()).filter(Boolean));
-  const maybe = argv[0];
-  if (maybe && !maybe.startsWith("-") && !known.has(maybe)) {
-    await runCodexWithAccount({ codexArgs: argv, forceLock: false, restorePreviousAuth: false });
     return;
   }
 

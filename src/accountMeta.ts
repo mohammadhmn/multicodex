@@ -8,7 +8,6 @@ export type AccountMeta = {
   lastUsedAt?: string;
   lastLoginStatus?: string;
   lastLoginCheckedAt?: string;
-  quotaNote?: string;
   updatedAt?: string;
 };
 

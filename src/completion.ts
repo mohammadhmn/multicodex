@@ -28,8 +28,8 @@ export async function completePolycodex(ctx: CompletionContext): Promise<string[
   const cword = Math.max(0, Math.min(ctx.cword - (ctx.words[0] === "polycodex" ? 1 : 0), words.length));
   const cur = ctx.current ?? words[cword] ?? "";
 
-  // Do not attempt to complete codex passthrough args.
-  if (words.includes("--")) return [];
+  // Do not attempt to complete codex passthrough args after the `run --` delimiter.
+  if (words[0] === "run" && words.includes("--")) return [];
 
   const topLevel = [
     "accounts",
@@ -46,7 +46,6 @@ export async function completePolycodex(ctx: CompletionContext): Promise<string[
     "run",
     "status",
     "whoami",
-    "quota",
     "codex",
     "completion",
     "help",
@@ -105,24 +104,9 @@ export async function completePolycodex(ctx: CompletionContext): Promise<string[
     return [];
   }
 
-  if (cmd0 === "status" || cmd0 === "whoami" || cmd0 === "quota") {
-    const quotaSub = ["open", "set", "clear"];
-    const flags = ["--account", "--help", "-h"];
-
+  if (cmd0 === "status" || cmd0 === "whoami") {
+    const flags = ["--help", "-h"];
     if (cur.startsWith("-")) return uniqPrefixMatch(flags, cur);
-
-    if (cmd0 === "quota") {
-      if (cword === 1) {
-        // Could be account name or subcommand.
-        return uniqPrefixMatch([...quotaSub, ...accountNames], cur);
-      }
-      const maybeSub = words[1];
-      if (maybeSub && quotaSub.includes(maybeSub)) {
-        if (cword === 2) return uniqPrefixMatch(accountNames, cur);
-      }
-      return [];
-    }
-
     if (cword === 1) return uniqPrefixMatch(accountNames, cur);
     return [];
   }
@@ -134,4 +118,3 @@ export async function completePolycodex(ctx: CompletionContext): Promise<string[
 
   return [];
 }
-
