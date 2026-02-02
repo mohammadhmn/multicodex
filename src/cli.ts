@@ -9,7 +9,8 @@ import { accountAuthPath } from "./paths";
 import { readAccountMeta, updateAccountMeta } from "./accountMeta";
 import { completePolycodex } from "./completion";
 import { fetchRateLimitsViaRpc } from "./codexRpc";
-import { formatRateLimits } from "./limits";
+import { rateLimitsToRow, renderLimitsTable, type LimitsRow } from "./limits";
+import { getCachedLimits, setCachedLimits } from "./limitsCache";
 
 async function fileExists(p: string): Promise<boolean> {
   try {
@@ -80,13 +81,6 @@ async function statusCommand(name?: string): Promise<never> {
   });
 
   process.exit(result.exitCode);
-}
-
-async function limitsForAccount(account: string, forceLock: boolean): Promise<string[]> {
-  return await withAccountAuth(
-    { account, forceLock, restorePreviousAuth: true },
-    async () => await fetchRateLimitsViaRpc(),
-  ).then(formatRateLimits);
 }
 
 const program = new Command();
@@ -267,8 +261,13 @@ program
   .alias("usage")
   .description("Show usage limits via Codex RPC")
   .option("--force", "reclaim a stale lock")
-  .action(async (name: string | undefined, opts: { force?: boolean }) => {
+  .option("--no-cache", "disable cached results")
+  .option("--ttl <seconds>", "cache TTL in seconds (default: 60)", (v: string) => Number.parseFloat(v))
+  .action(async (name: string | undefined, opts: { force?: boolean; cache?: boolean; ttl?: number }) => {
     const forceLock = Boolean(opts.force);
+    const useCache = opts.cache !== false;
+    const ttlSeconds = Number.isFinite(opts.ttl) ? Math.max(0, opts.ttl ?? 0) : 60;
+    const ttlMs = ttlSeconds * 1000;
     const targets = name
       ? [await resolveExistingAccount(name)]
       : (await listAccounts()).accounts.map((a) => a.name);
@@ -279,21 +278,38 @@ program
     }
 
     let hadError = false;
+    const rows: LimitsRow[] = [];
+    const errors: Array<{ account: string; message: string }> = [];
     for (const account of targets) {
       try {
-        const lines = await limitsForAccount(account, forceLock);
-        if (targets.length > 1) {
-          console.log(`${account}:`);
-          for (const line of lines) console.log(`  ${line}`);
-          console.log("");
-        } else {
-          for (const line of lines) console.log(line);
+        if (useCache) {
+          const cached = await getCachedLimits(account, ttlMs);
+          if (cached) {
+            const ageSec = Math.round(cached.ageMs / 1000);
+            rows.push(rateLimitsToRow(cached.snapshot, account, `cached ${ageSec}s`));
+            continue;
+          }
         }
+
+        console.error(`Fetching limits for ${account}...`);
+        const snapshot = await withAccountAuth(
+          { account, forceLock, restorePreviousAuth: true },
+          async () => await fetchRateLimitsViaRpc(),
+        );
+        await setCachedLimits(account, snapshot);
+        rows.push(rateLimitsToRow(snapshot, account, "live"));
       } catch (error) {
         hadError = true;
         const message = error instanceof Error ? error.message : String(error);
-        console.error(`${account}: ${message}`);
+        errors.push({ account, message });
       }
+    }
+    if (rows.length) {
+      const lines = renderLimitsTable(rows);
+      for (const line of lines) console.log(line);
+    }
+    if (errors.length) {
+      for (const err of errors) console.error(`${err.account}: ${err.message}`);
     }
     if (hadError) process.exitCode = 1;
   });
