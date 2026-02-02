@@ -1,6 +1,20 @@
 # Releasing
 
-## Checklist
+## Recommended
+
+Use the release helper script. It bumps versions, runs checks, builds, and packs.
+
+- Patch release (default; commit + tag + push + publish): `bun run release`
+- Prep without publishing: `bun run release --no-publish`
+- Minor bump: `bun run release --minor`
+- Major bump: `bun run release --major`
+- Full release (explicit version): `bun run release --version X.Y.Z`
+
+Notes:
+- The script refuses to run if `git status` is not clean.
+- `npm publish` may prompt for verification (2FA / browser), depending on your npm setup.
+
+## Manual Checklist (if needed)
 
 1) Update version
 - `package.json` version
@@ -19,4 +33,3 @@
 5) Tag the release
 - `git tag -a vX.Y.Z -m "vX.Y.Z"`
 - `git push origin vX.Y.Z`
-
