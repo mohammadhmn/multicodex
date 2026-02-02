@@ -12,10 +12,10 @@ let tmpHome: string | undefined;
 let tmpPoly: string | undefined;
 
 async function setup(): Promise<void> {
-  tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), "polycodex-home-"));
-  tmpPoly = await fs.mkdtemp(path.join(os.tmpdir(), "polycodex-root-"));
+  tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), "multicodex-home-"));
+  tmpPoly = await fs.mkdtemp(path.join(os.tmpdir(), "multicodex-root-"));
   process.env.HOME = tmpHome;
-  process.env.POLYCODEX_HOME = tmpPoly;
+  process.env.MULTICODEX_HOME = tmpPoly;
   await addAccount({ name: "work" });
 }
 
@@ -26,7 +26,7 @@ afterEach(async () => {
   tmpPoly = undefined;
   if (originalHome === undefined) delete process.env.HOME;
   else process.env.HOME = originalHome;
-  delete process.env.POLYCODEX_HOME;
+  delete process.env.MULTICODEX_HOME;
 });
 
 describe("authSwap", () => {
@@ -75,4 +75,3 @@ describe("authSwap", () => {
     expect(snapped).toBe("UPDATED\n");
   });
 });
-

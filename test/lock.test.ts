@@ -8,8 +8,8 @@ import { authLockDir } from "../src/paths";
 let tmpRoot: string | undefined;
 
 async function setup(): Promise<void> {
-  tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "polycodex-test-"));
-  process.env.POLYCODEX_HOME = tmpRoot;
+  tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "multicodex-test-"));
+  process.env.MULTICODEX_HOME = tmpRoot;
 }
 
 afterEach(async () => {
@@ -17,7 +17,7 @@ afterEach(async () => {
     await fs.rm(tmpRoot, { recursive: true, force: true });
     tmpRoot = undefined;
   }
-  delete process.env.POLYCODEX_HOME;
+  delete process.env.MULTICODEX_HOME;
 });
 
 describe("lock", () => {

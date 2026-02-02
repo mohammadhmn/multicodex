@@ -7,8 +7,8 @@ import { loadConfig, saveConfig } from "../src/config";
 let tmpRoot: string | undefined;
 
 async function withTempHome(): Promise<string> {
-  tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "polycodex-test-"));
-  process.env.POLYCODEX_HOME = tmpRoot;
+  tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "multicodex-test-"));
+  process.env.MULTICODEX_HOME = tmpRoot;
   return tmpRoot;
 }
 
@@ -17,7 +17,7 @@ afterEach(async () => {
     await fs.rm(tmpRoot, { recursive: true, force: true });
     tmpRoot = undefined;
   }
-  delete process.env.POLYCODEX_HOME;
+  delete process.env.MULTICODEX_HOME;
 });
 
 describe("config", () => {

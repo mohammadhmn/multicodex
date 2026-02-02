@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { RateLimitSnapshot } from "./codexRpc";
-import { polycodexHomeDir } from "./paths";
+import { multicodexHomeDir } from "./paths";
 
 type LimitsCache = {
   version: 1;
@@ -15,7 +15,7 @@ type LimitsCache = {
 };
 
 function cachePath(): string {
-  return path.join(polycodexHomeDir(), "limits-cache.json");
+  return path.join(multicodexHomeDir(), "limits-cache.json");
 }
 
 async function safeReadFile(p: string): Promise<string | undefined> {
@@ -68,4 +68,3 @@ export async function setCachedLimits(account: string, snapshot: RateLimitSnapsh
   cache.accounts[account] = { snapshot, fetchedAt: Date.now() };
   await saveCache(cache);
 }
-

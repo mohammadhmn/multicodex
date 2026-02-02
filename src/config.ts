@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { configPath, polycodexHomeDir } from "./paths";
+import { configPath, multicodexHomeDir } from "./paths";
 import type { PolyConfigAny, PolyConfigV1Legacy, PolyConfigV2 } from "./types";
 
 function defaultConfig(): PolyConfigV2 {
@@ -86,7 +86,7 @@ export async function loadConfig(): Promise<PolyConfigV2> {
 }
 
 export async function saveConfig(config: PolyConfigV2): Promise<void> {
-  const root = polycodexHomeDir();
+  const root = multicodexHomeDir();
   await fs.mkdir(root, { recursive: true });
 
   const filePath = configPath();
@@ -105,13 +105,13 @@ export function resolveAccountName(config: PolyConfigV2, requested?: string): st
   if (first) return first;
 
   throw new Error(
-    "No account configured. Run `polycodex accounts add <name>` and then `polycodex accounts use <name>`.",
+    "No account configured. Run `multicodex accounts add <name>` and then `multicodex accounts use <name>`.",
   );
 }
 
 export async function ensureAccountExists(config: PolyConfigV2, accountName: string): Promise<void> {
   if (accountName in config.accounts) return;
-  throw new Error(`Unknown account: ${accountName}. Run \`polycodex accounts list\`.`);
+  throw new Error(`Unknown account: ${accountName}. Run \`multicodex accounts list\`.`);
 }
 
 export function isValidAccountName(name: string): boolean {
