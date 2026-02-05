@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import { Command } from "commander";
 
-import { loadConfig, resolveAccountName } from "./config";
-import { addAccount, currentAccount, listAccounts, removeAccount, renameAccount, useAccount } from "./profiles";
+import { ensureAccountExists, loadConfig, resolveAccountName, saveConfig, normalizeAccountName } from "./config";
+import { addAccount, currentAccount, listAccounts, removeAccount, renameAccount } from "./profiles";
 import { applyAccountAuthToDefault, importDefaultAuthToAccount, withAccountAuth } from "./authSwap";
 import { runCodex, runCodexCapture } from "./runCodex";
 import { accountAuthPath } from "./paths";
@@ -11,6 +11,7 @@ import { completeMulticodex } from "./completion";
 import { fetchRateLimitsViaRpc } from "./codexRpc";
 import { rateLimitsToRow, renderLimitsTable, type LimitsRow } from "./limits";
 import { getCachedLimits, setCachedLimits } from "./limitsCache";
+import { padRight, toErrorMessage, truncateOneLine, wantsJsonArgv, writeJson, type JsonEnvelope } from "./cliOutput";
 
 async function fileExists(p: string): Promise<boolean> {
   try {
@@ -26,6 +27,19 @@ async function resolveExistingAccount(requested?: string): Promise<string> {
   const name = resolveAccountName(config, requested);
   if (!(name in config.accounts)) throw new Error(`Unknown account: ${name}`);
   return name;
+}
+
+async function setCurrentAccountAndApplyAuth(
+  name: string,
+  opts: { forceLock: boolean },
+): Promise<void> {
+  const account = normalizeAccountName(name);
+  const config = await loadConfig();
+  await ensureAccountExists(config, account);
+  await applyAccountAuthToDefault(account, opts.forceLock);
+  config.currentAccount = account;
+  await saveConfig(config);
+  await updateAccountMeta(account, { lastUsedAt: new Date().toISOString() });
 }
 
 async function runCodexWithAccount({
@@ -45,24 +59,74 @@ async function runCodexWithAccount({
   process.exit(exitCode);
 }
 
-async function listAccountsCommand(): Promise<void> {
+type AccountsListEntry = {
+  name: string;
+  isCurrent: boolean;
+  hasAuth: boolean;
+  lastUsedAt?: string;
+  lastLoginStatus?: string;
+};
+
+async function listAccountsDetailed(): Promise<{ currentAccount?: string; accounts: AccountsListEntry[] }> {
   const { accounts } = await listAccounts();
+  const detailed = await Promise.all(
+    accounts.map(async (a) => {
+      const [meta, hasAuth] = await Promise.all([readAccountMeta(a.name), fileExists(accountAuthPath(a.name))]);
+      return {
+        name: a.name,
+        isCurrent: a.isCurrent,
+        hasAuth,
+        lastUsedAt: meta?.lastUsedAt,
+        lastLoginStatus: meta?.lastLoginStatus,
+      } satisfies AccountsListEntry;
+    }),
+  );
+
+  return { currentAccount: accounts.find((a) => a.isCurrent)?.name, accounts: detailed };
+}
+
+async function listAccountsCommand(opts: { json: boolean }): Promise<void> {
+  const { accounts, currentAccount } = await listAccountsDetailed();
   if (!accounts.length) {
+    if (opts.json) {
+      const payload: JsonEnvelope<{ accounts: AccountsListEntry[]; currentAccount?: string }> = {
+        schemaVersion: 1,
+        command: "accounts.list",
+        ok: true,
+        data: { accounts: [], currentAccount },
+      };
+      writeJson(payload);
+      return;
+    }
     console.log("No accounts configured. Run: multicodex accounts add <name>");
     return;
   }
 
+  if (opts.json) {
+    const payload: JsonEnvelope<{ accounts: AccountsListEntry[]; currentAccount?: string }> = {
+      schemaVersion: 1,
+      command: "accounts.list",
+      ok: true,
+      data: { accounts, currentAccount },
+    };
+    writeJson(payload);
+    return;
+  }
+
+  const nameWidth = Math.max(...accounts.map((a) => a.name.length), 4);
+  const statusWidth = 22;
   for (const a of accounts) {
-    const meta = await readAccountMeta(a.name);
-    const hasAuth = await fileExists(accountAuthPath(a.name));
-    const status = meta?.lastLoginStatus ? meta.lastLoginStatus : hasAuth ? "auth saved" : "no auth";
-    const last = meta?.lastUsedAt ?? "never";
-    console.log(`${a.isCurrent ? "*" : " "} ${a.name}  ${status}  last used: ${last}`);
+    const rawStatus = a.lastLoginStatus ? truncateOneLine(a.lastLoginStatus, statusWidth) : a.hasAuth ? "auth saved" : "no auth";
+    const last = a.lastUsedAt ?? "never";
+    const marker = a.isCurrent ? "*" : " ";
+    console.log(
+      `${marker} ${padRight(a.name, nameWidth)}  ${padRight(rawStatus, statusWidth)}  last used: ${last}`,
+    );
   }
 }
 
-async function statusCommand(name?: string): Promise<never> {
-  const account = await resolveExistingAccount(name);
+async function statusCommand(opts: { name?: string; json: boolean }): Promise<never> {
+  const account = await resolveExistingAccount(opts.name);
   const result = await runCodexCapture({
     account,
     codexArgs: ["login", "status"],
@@ -70,8 +134,32 @@ async function statusCommand(name?: string): Promise<never> {
     restorePreviousAuth: true,
   });
 
-  if (result.stdout) process.stdout.write(result.stdout);
-  if (result.stderr) process.stderr.write(result.stderr);
+  if (opts.json) {
+    const payload: JsonEnvelope<{
+      account: string;
+      exitCode: number;
+      stdout: string;
+      stderr: string;
+      output: string;
+      checkedAt: string;
+    }> = {
+      schemaVersion: 1,
+      command: "status",
+      ok: result.exitCode === 0,
+      data: {
+        account,
+        exitCode: result.exitCode,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        output: (result.stdout + result.stderr).trim(),
+        checkedAt: new Date().toISOString(),
+      },
+    };
+    writeJson(payload);
+  } else {
+    if (result.stdout) process.stdout.write(result.stdout);
+    if (result.stderr) process.stderr.write(result.stderr);
+  }
   const output = (result.stdout + result.stderr).trim();
 
   await updateAccountMeta(account, {
@@ -98,21 +186,34 @@ const accounts = program
   .command("accounts")
   .alias("account")
   .description("Manage accounts")
-  .action(async () => {
-    await listAccountsCommand();
+  .option("--json", "output JSON")
+  .action(async (opts: { json?: boolean }) => {
+    await listAccountsCommand({ json: Boolean(opts.json) });
   });
 
 accounts
   .command("list")
   .description("List accounts")
-  .action(listAccountsCommand);
+  .option("--json", "output JSON")
+  .action(async (opts: { json?: boolean }) => await listAccountsCommand({ json: Boolean(opts.json) }));
 
 accounts
   .command("add <name>")
   .description("Add an account")
-  .action(async (name: string) => {
-    await addAccount({ name });
-    console.log(`Added account: ${name}`);
+  .option("--json", "output JSON")
+  .action(async (name: string, opts: { json?: boolean }) => {
+    const result = await addAccount({ name });
+    if (opts.json) {
+      const payload: JsonEnvelope<{ account: string; currentAccount?: string }> = {
+        schemaVersion: 1,
+        command: "accounts.add",
+        ok: true,
+        data: { account: result.account, currentAccount: result.config.currentAccount },
+      };
+      writeJson(payload);
+      return;
+    }
+    console.log(`Added account: ${result.account}`);
   });
 
 accounts
@@ -120,38 +221,92 @@ accounts
   .alias("rm")
   .description("Remove an account")
   .option("--delete-data", "delete stored account data")
-  .action(async (name: string, opts: { deleteData?: boolean }) => {
-    await removeAccount({ name, deleteData: Boolean(opts.deleteData) });
-    console.log(`Removed account: ${name}`);
+  .option("--json", "output JSON")
+  .action(async (name: string, opts: { deleteData?: boolean; json?: boolean }) => {
+    const config = await removeAccount({ name, deleteData: Boolean(opts.deleteData) });
+    if (opts.json) {
+      const payload: JsonEnvelope<{ removedAccount: string; currentAccount?: string }> = {
+        schemaVersion: 1,
+        command: "accounts.remove",
+        ok: true,
+        data: { removedAccount: normalizeAccountName(name), currentAccount: config.currentAccount },
+      };
+      writeJson(payload);
+      return;
+    }
+    console.log(`Removed account: ${normalizeAccountName(name)}`);
   });
 
 accounts
   .command("rename <old> <new>")
   .description("Rename an account")
-  .action(async (oldName: string, newName: string) => {
-    await renameAccount(oldName, newName);
-    console.log(`Renamed account: ${oldName} -> ${newName}`);
+  .option("--json", "output JSON")
+  .action(async (oldName: string, newName: string, opts: { json?: boolean }) => {
+    const config = await renameAccount(oldName, newName);
+    if (opts.json) {
+      const payload: JsonEnvelope<{ from: string; to: string; currentAccount?: string }> = {
+        schemaVersion: 1,
+        command: "accounts.rename",
+        ok: true,
+        data: { from: normalizeAccountName(oldName), to: normalizeAccountName(newName), currentAccount: config.currentAccount },
+      };
+      writeJson(payload);
+      return;
+    }
+    console.log(`Renamed account: ${normalizeAccountName(oldName)} -> ${normalizeAccountName(newName)}`);
   });
 
 accounts
   .command("use <name>")
   .alias("switch")
   .description("Set current account and apply its auth to ~/.codex/auth.json")
-  .action(async (name: string) => {
-    await useAccount(name);
-    await applyAccountAuthToDefault(name, false);
-    console.log(`Now using: ${name}`);
+  .option("--force", "reclaim a stale lock")
+  .option("--json", "output JSON")
+  .action(async (name: string, opts: { force?: boolean; json?: boolean }) => {
+    await setCurrentAccountAndApplyAuth(name, { forceLock: Boolean(opts.force) });
+    if (opts.json) {
+      const payload: JsonEnvelope<{ currentAccount: string }> = {
+        schemaVersion: 1,
+        command: "accounts.use",
+        ok: true,
+        data: { currentAccount: normalizeAccountName(name) },
+      };
+      writeJson(payload);
+      return;
+    }
+    console.log(`Now using: ${normalizeAccountName(name)}`);
   });
 
 accounts
   .command("current")
   .alias("which")
   .description("Print current account")
-  .action(async () => {
+  .option("--json", "output JSON")
+  .action(async (opts: { json?: boolean }) => {
     const name = await currentAccount();
     if (!name) {
+      if (opts.json) {
+        const payload: JsonEnvelope<null> = {
+          schemaVersion: 1,
+          command: "accounts.current",
+          ok: false,
+          error: { message: "No current account set. Run `multicodex accounts add <name>`.", code: "NO_CURRENT_ACCOUNT" },
+        };
+        writeJson(payload);
+        process.exit(2);
+      }
       console.error("No current account set. Run: multicodex accounts add <name>");
       process.exit(2);
+    }
+    if (opts.json) {
+      const payload: JsonEnvelope<{ currentAccount: string }> = {
+        schemaVersion: 1,
+        command: "accounts.current",
+        ok: true,
+        data: { currentAccount: name },
+      };
+      writeJson(payload);
+      return;
     }
     console.log(name);
   });
@@ -159,63 +314,209 @@ accounts
 accounts
   .command("import [name]")
   .description("Import current ~/.codex/auth.json into an account snapshot")
-  .action(async (name?: string) => {
+  .option("--force", "reclaim a stale lock")
+  .option("--json", "output JSON")
+  .action(async (name: string | undefined, opts: { force?: boolean; json?: boolean }) => {
     const account = await resolveExistingAccount(name);
-    await importDefaultAuthToAccount(account);
+    await importDefaultAuthToAccount(account, Boolean(opts.force));
     await updateAccountMeta(account, { lastUsedAt: new Date().toISOString() });
+    if (opts.json) {
+      const payload: JsonEnvelope<{ account: string }> = {
+        schemaVersion: 1,
+        command: "accounts.import",
+        ok: true,
+        data: { account },
+      };
+      writeJson(payload);
+      return;
+    }
     console.log(`Imported ~/.codex/auth.json into account: ${account}`);
   });
 
 // aliases for common accounts commands
-program.command("ls").description("Alias for `accounts list`").action(listAccountsCommand);
-program.command("add <name>").description("Alias for `accounts add`").action(async (name: string) => {
-  await addAccount({ name });
-  console.log(`Added account: ${name}`);
-});
+program
+  .command("ls")
+  .description("Alias for `accounts list`")
+  .option("--json", "output JSON")
+  .action(async (opts: { json?: boolean }) => await listAccountsCommand({ json: Boolean(opts.json) }));
+program
+  .command("add <name>")
+  .description("Alias for `accounts add`")
+  .option("--json", "output JSON")
+  .action(async (name: string, opts: { json?: boolean }) => {
+    const result = await addAccount({ name });
+    if (opts.json) {
+      const payload: JsonEnvelope<{ account: string; currentAccount?: string }> = {
+        schemaVersion: 1,
+        command: "accounts.add",
+        ok: true,
+        data: { account: result.account, currentAccount: result.config.currentAccount },
+      };
+      writeJson(payload);
+      return;
+    }
+    console.log(`Added account: ${result.account}`);
+  });
 program
   .command("rm <name>")
   .description("Alias for `accounts remove`")
   .option("--delete-data", "delete stored account data")
-  .action(async (name: string, opts: { deleteData?: boolean }) => {
-    await removeAccount({ name, deleteData: Boolean(opts.deleteData) });
-    console.log(`Removed account: ${name}`);
+  .option("--json", "output JSON")
+  .action(async (name: string, opts: { deleteData?: boolean; json?: boolean }) => {
+    const config = await removeAccount({ name, deleteData: Boolean(opts.deleteData) });
+    if (opts.json) {
+      const payload: JsonEnvelope<{ removedAccount: string; currentAccount?: string }> = {
+        schemaVersion: 1,
+        command: "accounts.remove",
+        ok: true,
+        data: { removedAccount: normalizeAccountName(name), currentAccount: config.currentAccount },
+      };
+      writeJson(payload);
+      return;
+    }
+    console.log(`Removed account: ${normalizeAccountName(name)}`);
   });
-program.command("rename <old> <new>").description("Alias for `accounts rename`").action(async (a, b) => {
-  await renameAccount(a, b);
-  console.log(`Renamed account: ${a} -> ${b}`);
-});
-program.command("use <name>").description("Alias for `accounts use`").action(async (name: string) => {
-  await useAccount(name);
-  await applyAccountAuthToDefault(name, false);
-  console.log(`Now using: ${name}`);
-});
-program.command("switch <name>").description("Alias for `accounts use`").action(async (name: string) => {
-  await useAccount(name);
-  await applyAccountAuthToDefault(name, false);
-  console.log(`Now using: ${name}`);
-});
-program.command("current").description("Alias for `accounts current`").action(async () => {
-  const name = await currentAccount();
-  if (!name) {
-    console.error("No current account set. Run: multicodex accounts add <name>");
-    process.exit(2);
-  }
-  console.log(name);
-});
-program.command("which").description("Alias for `accounts current`").action(async () => {
-  const name = await currentAccount();
-  if (!name) {
-    console.error("No current account set. Run: multicodex accounts add <name>");
-    process.exit(2);
-  }
-  console.log(name);
-});
-program.command("import [name]").description("Alias for `accounts import`").action(async (name?: string) => {
-  const account = await resolveExistingAccount(name);
-  await importDefaultAuthToAccount(account);
-  await updateAccountMeta(account, { lastUsedAt: new Date().toISOString() });
-  console.log(`Imported ~/.codex/auth.json into account: ${account}`);
-});
+program
+  .command("rename <old> <new>")
+  .description("Alias for `accounts rename`")
+  .option("--json", "output JSON")
+  .action(async (a: string, b: string, opts: { json?: boolean }) => {
+    const config = await renameAccount(a, b);
+    if (opts.json) {
+      const payload: JsonEnvelope<{ from: string; to: string; currentAccount?: string }> = {
+        schemaVersion: 1,
+        command: "accounts.rename",
+        ok: true,
+        data: { from: normalizeAccountName(a), to: normalizeAccountName(b), currentAccount: config.currentAccount },
+      };
+      writeJson(payload);
+      return;
+    }
+    console.log(`Renamed account: ${normalizeAccountName(a)} -> ${normalizeAccountName(b)}`);
+  });
+program
+  .command("use <name>")
+  .description("Alias for `accounts use`")
+  .option("--force", "reclaim a stale lock")
+  .option("--json", "output JSON")
+  .action(async (name: string, opts: { force?: boolean; json?: boolean }) => {
+    await setCurrentAccountAndApplyAuth(name, { forceLock: Boolean(opts.force) });
+    if (opts.json) {
+      const payload: JsonEnvelope<{ currentAccount: string }> = {
+        schemaVersion: 1,
+        command: "accounts.use",
+        ok: true,
+        data: { currentAccount: normalizeAccountName(name) },
+      };
+      writeJson(payload);
+      return;
+    }
+    console.log(`Now using: ${normalizeAccountName(name)}`);
+  });
+program
+  .command("switch <name>")
+  .description("Alias for `accounts use`")
+  .option("--force", "reclaim a stale lock")
+  .option("--json", "output JSON")
+  .action(async (name: string, opts: { force?: boolean; json?: boolean }) => {
+    await setCurrentAccountAndApplyAuth(name, { forceLock: Boolean(opts.force) });
+    if (opts.json) {
+      const payload: JsonEnvelope<{ currentAccount: string }> = {
+        schemaVersion: 1,
+        command: "accounts.use",
+        ok: true,
+        data: { currentAccount: normalizeAccountName(name) },
+      };
+      writeJson(payload);
+      return;
+    }
+    console.log(`Now using: ${normalizeAccountName(name)}`);
+  });
+program
+  .command("current")
+  .description("Alias for `accounts current`")
+  .option("--json", "output JSON")
+  .action(async (opts: { json?: boolean }) => {
+    const name = await currentAccount();
+    if (!name) {
+      if (opts.json) {
+        const payload: JsonEnvelope<null> = {
+          schemaVersion: 1,
+          command: "accounts.current",
+          ok: false,
+          error: { message: "No current account set. Run `multicodex accounts add <name>`.", code: "NO_CURRENT_ACCOUNT" },
+        };
+        writeJson(payload);
+        process.exit(2);
+      }
+      console.error("No current account set. Run: multicodex accounts add <name>");
+      process.exit(2);
+    }
+    if (opts.json) {
+      const payload: JsonEnvelope<{ currentAccount: string }> = {
+        schemaVersion: 1,
+        command: "accounts.current",
+        ok: true,
+        data: { currentAccount: name },
+      };
+      writeJson(payload);
+      return;
+    }
+    console.log(name);
+  });
+program
+  .command("which")
+  .description("Alias for `accounts current`")
+  .option("--json", "output JSON")
+  .action(async (opts: { json?: boolean }) => {
+    const name = await currentAccount();
+    if (!name) {
+      if (opts.json) {
+        const payload: JsonEnvelope<null> = {
+          schemaVersion: 1,
+          command: "accounts.current",
+          ok: false,
+          error: { message: "No current account set. Run `multicodex accounts add <name>`.", code: "NO_CURRENT_ACCOUNT" },
+        };
+        writeJson(payload);
+        process.exit(2);
+      }
+      console.error("No current account set. Run: multicodex accounts add <name>");
+      process.exit(2);
+    }
+    if (opts.json) {
+      const payload: JsonEnvelope<{ currentAccount: string }> = {
+        schemaVersion: 1,
+        command: "accounts.current",
+        ok: true,
+        data: { currentAccount: name },
+      };
+      writeJson(payload);
+      return;
+    }
+    console.log(name);
+  });
+program
+  .command("import [name]")
+  .description("Alias for `accounts import`")
+  .option("--force", "reclaim a stale lock")
+  .option("--json", "output JSON")
+  .action(async (name: string | undefined, opts: { force?: boolean; json?: boolean }) => {
+    const account = await resolveExistingAccount(name);
+    await importDefaultAuthToAccount(account, Boolean(opts.force));
+    await updateAccountMeta(account, { lastUsedAt: new Date().toISOString() });
+    if (opts.json) {
+      const payload: JsonEnvelope<{ account: string }> = {
+        schemaVersion: 1,
+        command: "accounts.import",
+        ok: true,
+        data: { account },
+      };
+      writeJson(payload);
+      return;
+    }
+    console.log(`Imported ~/.codex/auth.json into account: ${account}`);
+  });
 
 // run
 program
@@ -244,15 +545,21 @@ program
 program
   .command("status [name]")
   .description("Show login status for an account (runs `codex login status`)")
-  .action(async (name?: string) => {
-    await statusCommand(name);
+  .option("--account <name>", "account name (alternative to positional)")
+  .option("--json", "output JSON")
+  .action(async (name: string | undefined, opts: { account?: string; json?: boolean }) => {
+    if (opts.account && name) throw new Error("Use either a positional [name] or --account, not both.");
+    await statusCommand({ name: opts.account ?? name, json: Boolean(opts.json) });
   });
 
 program
   .command("whoami [name]")
   .description("Alias for `status`")
-  .action(async (name?: string) => {
-    await statusCommand(name);
+  .option("--account <name>", "account name (alternative to positional)")
+  .option("--json", "output JSON")
+  .action(async (name: string | undefined, opts: { account?: string; json?: boolean }) => {
+    if (opts.account && name) throw new Error("Use either a positional [name] or --account, not both.");
+    await statusCommand({ name: opts.account ?? name, json: Boolean(opts.json) });
   });
 
 // limits
@@ -260,25 +567,41 @@ program
   .command("limits [name]")
   .alias("usage")
   .description("Show usage limits via Codex RPC")
+  .option("--account <name>", "account name (alternative to positional)")
   .option("--force", "reclaim a stale lock")
   .option("--no-cache", "disable cached results")
   .option("--ttl <seconds>", "cache TTL in seconds (default: 60)", (v: string) => Number.parseFloat(v))
-  .action(async (name: string | undefined, opts: { force?: boolean; cache?: boolean; ttl?: number }) => {
+  .option("--json", "output JSON")
+  .action(async (name: string | undefined, opts: { account?: string; force?: boolean; cache?: boolean; ttl?: number; json?: boolean }) => {
+    if (opts.account && name) throw new Error("Use either a positional [name] or --account, not both.");
     const forceLock = Boolean(opts.force);
     const useCache = opts.cache !== false;
     const ttlSeconds = Number.isFinite(opts.ttl) ? Math.max(0, opts.ttl ?? 0) : 60;
     const ttlMs = ttlSeconds * 1000;
-    const targets = name
-      ? [await resolveExistingAccount(name)]
+    const requested = opts.account ?? name;
+    const targets = requested
+      ? [await resolveExistingAccount(requested)]
       : (await listAccounts()).accounts.map((a) => a.name);
 
     if (!targets.length) {
+      if (opts.json) {
+        const payload: JsonEnvelope<null> = {
+          schemaVersion: 1,
+          command: "limits",
+          ok: false,
+          error: { message: "No accounts configured. Run `multicodex accounts add <name>`.", code: "NO_ACCOUNTS" },
+        };
+        writeJson(payload);
+        process.exitCode = 2;
+        return;
+      }
       console.log("No accounts configured. Run: multicodex accounts add <name>");
       return;
     }
 
     let hadError = false;
     const rows: LimitsRow[] = [];
+    const results: Array<{ account: string; source: string; snapshot?: unknown; ageSec?: number }> = [];
     const errors: Array<{ account: string; message: string }> = [];
     for (const account of targets) {
       try {
@@ -287,23 +610,40 @@ program
           if (cached) {
             const ageSec = Math.round(cached.ageMs / 1000);
             rows.push(rateLimitsToRow(cached.snapshot, account, `cached ${ageSec}s`));
+            results.push({ account, source: "cached", snapshot: cached.snapshot, ageSec });
             continue;
           }
         }
 
-        console.error(`Fetching limits for ${account}...`);
+        if (!opts.json) console.error(`Fetching limits for ${account}...`);
         const snapshot = await withAccountAuth(
           { account, forceLock, restorePreviousAuth: true },
           async () => await fetchRateLimitsViaRpc(),
         );
         await setCachedLimits(account, snapshot);
         rows.push(rateLimitsToRow(snapshot, account, "live"));
+        results.push({ account, source: "live", snapshot });
       } catch (error) {
         hadError = true;
-        const message = error instanceof Error ? error.message : String(error);
+        const message = toErrorMessage(error);
         errors.push({ account, message });
       }
     }
+    if (opts.json) {
+      const payload: JsonEnvelope<{
+        results: Array<{ account: string; source: string; snapshot?: unknown; ageSec?: number }>;
+        errors: Array<{ account: string; message: string }>;
+      }> = {
+        schemaVersion: 1,
+        command: "limits",
+        ok: !hadError,
+        data: { results, errors },
+      };
+      writeJson(payload);
+      process.exitCode = hadError ? 1 : 0;
+      return;
+    }
+
     if (rows.length) {
       const lines = renderLimitsTable(rows);
       for (const line of lines) console.log(line);
@@ -422,7 +762,7 @@ async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   if (argv.length === 0) {
     // Default behavior: show multicodex info (do not start a codex session).
-    await listAccountsCommand();
+    await listAccountsCommand({ json: false });
     return;
   }
 
@@ -430,7 +770,17 @@ async function main(): Promise<void> {
 }
 
 await main().catch((error) => {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = toErrorMessage(error);
+  if (wantsJsonArgv()) {
+    const payload: JsonEnvelope<null> = {
+      schemaVersion: 1,
+      command: "error",
+      ok: false,
+      error: { message },
+    };
+    writeJson(payload);
+    process.exit(1);
+  }
   console.error(message);
   process.exit(1);
 });

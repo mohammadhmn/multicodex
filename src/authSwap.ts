@@ -89,8 +89,8 @@ export async function withAccountAuth<T>(
   }
 }
 
-export async function importDefaultAuthToAccount(account: string): Promise<void> {
-  const lock = await acquireAuthLock({ account, force: false });
+export async function importDefaultAuthToAccount(account: string, forceLock = false): Promise<void> {
+  const lock = await acquireAuthLock({ account, force: forceLock });
   try {
     await snapshotDefaultAuthToAccount(account);
   } finally {
