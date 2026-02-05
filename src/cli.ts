@@ -3,15 +3,15 @@ import { Command } from "commander";
 
 import { ensureAccountExists, loadConfig, resolveAccountName, saveConfig, normalizeAccountName } from "./config";
 import { addAccount, currentAccount, listAccounts, removeAccount, renameAccount } from "./profiles";
-import { applyAccountAuthToDefault, importDefaultAuthToAccount, withAccountAuth } from "./authSwap";
-import { runCodex, runCodexCapture } from "./runCodex";
+import { applyAccountAuthToDefault, importDefaultAuthToAccount, withAccountAuth } from "./auth-swap";
+import { runCodex, runCodexCapture } from "./run-codex";
 import { accountAuthPath } from "./paths";
-import { readAccountMeta, updateAccountMeta } from "./accountMeta";
+import { readAccountMeta, updateAccountMeta } from "./account-meta";
 import { completeMulticodex } from "./completion";
-import { fetchRateLimitsViaRpc } from "./codexRpc";
+import { fetchRateLimitsViaRpc } from "./codex-rpc";
 import { rateLimitsToRow, renderLimitsTable, type LimitsRow } from "./limits";
-import { getCachedLimits, setCachedLimits } from "./limitsCache";
-import { padRight, toErrorMessage, truncateOneLine, wantsJsonArgv, writeJson, type JsonEnvelope } from "./cliOutput";
+import { getCachedLimits, setCachedLimits } from "./limits-cache";
+import { padRight, toErrorMessage, truncateOneLine, wantsJsonArgv, writeJson, type JsonEnvelope } from "./cli-output";
 
 async function fileExists(p: string): Promise<boolean> {
   try {

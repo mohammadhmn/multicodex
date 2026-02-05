@@ -1,4 +1,4 @@
-import type { CreditsSnapshot, RateLimitSnapshot, RateLimitWindow } from "./codexRpc";
+import type { CreditsSnapshot, RateLimitSnapshot, RateLimitWindow } from "./codex-rpc";
 
 export type LimitsRow = {
   account: string;

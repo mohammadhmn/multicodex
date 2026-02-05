@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { addAccount } from "../src/profiles";
-import { applyAccountAuthToDefault, importDefaultAuthToAccount, withAccountAuth } from "../src/authSwap";
+import { applyAccountAuthToDefault, importDefaultAuthToAccount, withAccountAuth } from "../src/auth-swap";
 import { accountAuthPath, defaultCodexAuthPath } from "../src/paths";
 
 const originalHome = process.env.HOME;

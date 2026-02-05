@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { RateLimitSnapshot } from "./codexRpc";
+import type { RateLimitSnapshot } from "./codex-rpc";
 import { multicodexHomeDir } from "./paths";
 
 type LimitsCache = {

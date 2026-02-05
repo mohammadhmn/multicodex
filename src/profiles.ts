@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import { loadConfig, normalizeAccountName, isValidAccountName, saveConfig } from "./config";
 import { accountDir } from "./paths";
-import { ensureAccountMeta, updateAccountMeta } from "./accountMeta";
+import { ensureAccountMeta, updateAccountMeta } from "./account-meta";
 import type { PolyConfigV2 } from "./types";
 
 export async function addAccount({
