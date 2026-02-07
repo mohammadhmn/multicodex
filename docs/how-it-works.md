@@ -24,8 +24,7 @@ and a small config file:
 
 - `~/.config/multicodex/config.json`
 
-You can override the root with `MULTICODEX_HOME` (or legacy `POLYCODEX_HOME`).
-If `~/.config/polycodex` already exists, multicodex will keep using it for backward compatibility.
+You can override the root with `MULTICODEX_HOME`.
 
 ## Locking / safety
 

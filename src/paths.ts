@@ -14,14 +14,10 @@ export function defaultCodexHomeDir(): string {
 }
 
 export function multicodexHomeDir(): string {
-  const override = process.env.MULTICODEX_HOME ?? process.env.POLYCODEX_HOME;
+  const override = process.env.MULTICODEX_HOME;
   if (override && override.trim()) return path.resolve(override);
 
-  const newDir = path.join(homeDir(), ".config", "multicodex");
-  const oldDir = path.join(homeDir(), ".config", "polycodex");
-  if (fs.existsSync(newDir)) return newDir;
-  if (fs.existsSync(oldDir)) return oldDir;
-  return newDir;
+  return path.join(homeDir(), ".config", "multicodex");
 }
 
 export function configPath(): string {

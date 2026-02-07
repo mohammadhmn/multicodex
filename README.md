@@ -93,8 +93,7 @@ See `CONTRIBUTING.md`.
 
 ## Storage
 
-Default root: `~/.config/multicodex` (override with `MULTICODEX_HOME`; `POLYCODEX_HOME` is still supported).
-If `~/.config/polycodex` exists, multicodex will use it for backward compatibility.
+Default root: `~/.config/multicodex` (override with `MULTICODEX_HOME`).
 
 Per-account auth snapshots:
 - `~/.config/multicodex/accounts/<name>/auth.json`

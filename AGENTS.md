@@ -49,4 +49,4 @@
 ## Security & Configuration Tips
 
 - `multicodex` swaps `~/.codex/auth.json` under a lock; avoid manual edits while it is running.
-- Local state is stored under `~/.config/multicodex` (override with `MULTICODEX_HOME` for testing; `POLYCODEX_HOME` still works).
+- Local state is stored under `~/.config/multicodex` (override with `MULTICODEX_HOME` for testing).

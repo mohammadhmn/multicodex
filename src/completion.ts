@@ -24,7 +24,7 @@ async function listAccountNames(): Promise<string[]> {
 }
 
 export async function completeMulticodex(ctx: CompletionContext): Promise<string[]> {
-  const invocations = new Set(["multicodex", "mcodex", "polycodex"]);
+  const invocations = new Set(["multicodex", "mcodex"]);
   const isCommand = invocations.has(ctx.words[0] ?? "");
   const words = isCommand ? ctx.words.slice(1) : ctx.words.slice();
   const cword = Math.max(0, Math.min(ctx.cword - (isCommand ? 1 : 0), words.length));
