@@ -3,6 +3,8 @@ import path from "node:path";
 import type { RateLimitSnapshot } from "./codex-rpc";
 import { multicodexHomeDir } from "./paths";
 
+export type CachedLimitsProvider = "api" | "rpc";
+
 type LimitsCache = {
   version: 1;
   accounts: Record<
@@ -10,6 +12,7 @@ type LimitsCache = {
     {
       snapshot: RateLimitSnapshot;
       fetchedAt: number;
+      provider?: CachedLimitsProvider;
     }
   >;
 };
@@ -54,17 +57,25 @@ async function saveCache(cache: LimitsCache): Promise<void> {
 export async function getCachedLimits(
   account: string,
   ttlMs: number,
-): Promise<{ snapshot: RateLimitSnapshot; ageMs: number } | null> {
+): Promise<{ snapshot: RateLimitSnapshot; ageMs: number; provider?: CachedLimitsProvider } | null> {
   const cache = await loadCache();
   const entry = cache.accounts[account];
   if (!entry) return null;
   const ageMs = Date.now() - entry.fetchedAt;
   if (ageMs > ttlMs) return null;
-  return { snapshot: entry.snapshot, ageMs };
+  return { snapshot: entry.snapshot, ageMs, provider: entry.provider };
 }
 
-export async function setCachedLimits(account: string, snapshot: RateLimitSnapshot): Promise<void> {
+export async function setCachedLimits(
+  account: string,
+  snapshot: RateLimitSnapshot,
+  source: "live-api" | "live-rpc",
+): Promise<void> {
   const cache = await loadCache();
-  cache.accounts[account] = { snapshot, fetchedAt: Date.now() };
+  cache.accounts[account] = {
+    snapshot,
+    fetchedAt: Date.now(),
+    provider: source === "live-api" ? "api" : "rpc",
+  };
   await saveCache(cache);
 }

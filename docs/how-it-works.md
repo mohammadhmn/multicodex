@@ -72,16 +72,24 @@ Aliases: `ls`, `add`, `rm`, `rename`, `use`, `switch`, `current`, `which`, `impo
 
 ### Limits
 
-`multicodex limits [<name>]` uses the Codex app-server RPC to fetch current usage limits per account.
+`multicodex limits [<name>]` supports provider modes:
+
+- `--provider auto` (default): OpenUsage-style usage API first, then RPC fallback.
+- `--provider api`: only `GET https://chatgpt.com/backend-api/wham/usage`.
+- `--provider rpc`: only Codex app-server RPC.
+
+API mode refreshes OAuth tokens with:
+
+- `POST https://auth.openai.com/oauth/token`
 
 Under the hood it runs:
 
 - `codex -s read-only -a untrusted app-server`
 - JSON-RPC methods: `initialize`, `initialized`, and `account/rateLimits/read`
 
-If Codex app-server isn’t available in your installed `codex`, this command will fail.
+If Codex app-server isn’t available in your installed `codex`, `--provider rpc` fails, while `--provider auto` can still succeed via API.
 
-Caching: results are cached for 60 seconds by default. Use `--no-cache` to disable or `--ttl <seconds>` to change it.
+Caching: results are cached for 120 seconds by default. Use `--refresh` to force live refetch, `--no-cache` to disable cache usage, or `--ttl <seconds>` to change the TTL.
 
 ## Autocomplete
 

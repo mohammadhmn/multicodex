@@ -68,6 +68,7 @@ export async function completeMulticodex(ctx: CompletionContext): Promise<string
 
   // Common: complete account names after --account.
   if (prev === "--account") return uniqPrefixMatch(accountNames, cur);
+  if (prev === "--provider") return uniqPrefixMatch(["auto", "api", "rpc"], cur);
 
   if (cmd0 === "accounts" || cmd0 === "account") {
     const subcommands = ["list", "add", "remove", "rm", "rename", "use", "switch", "current", "which", "import"];
@@ -129,7 +130,7 @@ export async function completeMulticodex(ctx: CompletionContext): Promise<string
   if (cmd0 === "status" || cmd0 === "whoami" || cmd0 === "limits" || cmd0 === "usage") {
     const flags =
       cmd0 === "limits" || cmd0 === "usage"
-        ? ["--account", "--json", "--force", "--no-cache", "--ttl", "--help", "-h"]
+        ? ["--account", "--provider", "--json", "--force", "--no-cache", "--refresh", "--ttl", "--help", "-h"]
         : ["--account", "--json", "--help", "-h"];
     if (cur.startsWith("-")) return uniqPrefixMatch(flags, cur);
     if (cword === 1) return uniqPrefixMatch(accountNames, cur);

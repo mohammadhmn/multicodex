@@ -8,7 +8,9 @@ import { runCodex, runCodexCapture } from "./run-codex";
 import { accountAuthPath } from "./paths";
 import { readAccountMeta, updateAccountMeta } from "./account-meta";
 import { completeMulticodex } from "./completion";
+import type { RateLimitSnapshot } from "./codex-rpc";
 import { fetchRateLimitsViaRpc } from "./codex-rpc";
+import { fetchRateLimitsViaApi } from "./codex-usage-api";
 import { rateLimitsToRow, renderLimitsTable, type LimitsRow } from "./limits";
 import { getCachedLimits, setCachedLimits } from "./limits-cache";
 import { padRight, toErrorMessage, truncateOneLine, wantsJsonArgv, writeJson, type JsonEnvelope } from "./cli-output";
@@ -169,6 +171,41 @@ async function statusCommand(opts: { name?: string; json: boolean }): Promise<ne
   });
 
   process.exit(result.exitCode);
+}
+
+type LimitsProvider = "auto" | "api" | "rpc";
+type LiveLimitsSource = "live-api" | "live-rpc";
+
+function parseLimitsProvider(raw: string | undefined): LimitsProvider {
+  if (!raw) return "auto";
+  if (raw === "auto" || raw === "api" || raw === "rpc") return raw;
+  throw new Error(`Invalid --provider value: ${raw}. Use one of: auto, api, rpc.`);
+}
+
+async function fetchLiveLimits(
+  provider: LimitsProvider,
+): Promise<{ snapshot: RateLimitSnapshot; source: LiveLimitsSource }> {
+  if (provider === "api") {
+    return { snapshot: await fetchRateLimitsViaApi(), source: "live-api" };
+  }
+  if (provider === "rpc") {
+    return { snapshot: await fetchRateLimitsViaRpc(), source: "live-rpc" };
+  }
+
+  let apiError: unknown;
+  try {
+    return { snapshot: await fetchRateLimitsViaApi(), source: "live-api" };
+  } catch (error) {
+    apiError = error;
+  }
+
+  try {
+    return { snapshot: await fetchRateLimitsViaRpc(), source: "live-rpc" };
+  } catch (rpcError) {
+    const apiMessage = toErrorMessage(apiError);
+    const rpcMessage = toErrorMessage(rpcError);
+    throw new Error(`API failed (${apiMessage}); RPC fallback failed (${rpcMessage})`);
+  }
 }
 
 const program = new Command();
@@ -566,17 +603,20 @@ program
 program
   .command("limits [name]")
   .alias("usage")
-  .description("Show usage limits via Codex RPC")
+  .description("Show usage limits via OpenUsage-style API (with RPC fallback)")
   .option("--account <name>", "account name (alternative to positional)")
+  .option("--provider <provider>", "usage provider: auto|api|rpc (default: auto)")
   .option("--force", "reclaim a stale lock")
   .option("--no-cache", "disable cached results")
-  .option("--ttl <seconds>", "cache TTL in seconds (default: 60)", (v: string) => Number.parseFloat(v))
+  .option("--refresh", "force refetch live values (bypass cache)")
+  .option("--ttl <seconds>", "cache TTL in seconds (default: 120)", (v: string) => Number.parseFloat(v))
   .option("--json", "output JSON")
-  .action(async (name: string | undefined, opts: { account?: string; force?: boolean; cache?: boolean; ttl?: number; json?: boolean }) => {
+  .action(async (name: string | undefined, opts: { account?: string; provider?: string; force?: boolean; cache?: boolean; refresh?: boolean; ttl?: number; json?: boolean }) => {
     if (opts.account && name) throw new Error("Use either a positional [name] or --account, not both.");
+    const provider = parseLimitsProvider(opts.provider);
     const forceLock = Boolean(opts.force);
-    const useCache = opts.cache !== false;
-    const ttlSeconds = Number.isFinite(opts.ttl) ? Math.max(0, opts.ttl ?? 0) : 60;
+    const useCache = opts.cache !== false && opts.refresh !== true;
+    const ttlSeconds = Number.isFinite(opts.ttl) ? Math.max(0, opts.ttl ?? 0) : 120;
     const ttlMs = ttlSeconds * 1000;
     const requested = opts.account ?? name;
     const targets = requested
@@ -601,7 +641,7 @@ program
 
     let hadError = false;
     const rows: LimitsRow[] = [];
-    const results: Array<{ account: string; source: string; snapshot?: unknown; ageSec?: number }> = [];
+    const results: Array<{ account: string; source: string; provider: LimitsProvider | "cached"; snapshot?: unknown; ageSec?: number }> = [];
     const errors: Array<{ account: string; message: string }> = [];
     for (const account of targets) {
       try {
@@ -609,20 +649,26 @@ program
           const cached = await getCachedLimits(account, ttlMs);
           if (cached) {
             const ageSec = Math.round(cached.ageMs / 1000);
-            rows.push(rateLimitsToRow(cached.snapshot, account, `cached ${ageSec}s`));
-            results.push({ account, source: "cached", snapshot: cached.snapshot, ageSec });
+            const cachedProvider = cached.provider ?? "cached";
+            rows.push(rateLimitsToRow(cached.snapshot, account, `cached ${cachedProvider} ${ageSec}s`));
+            results.push({ account, source: "cached", provider: cachedProvider, snapshot: cached.snapshot, ageSec });
             continue;
           }
         }
 
         if (!opts.json) console.error(`Fetching limits for ${account}...`);
-        const snapshot = await withAccountAuth(
+        const live = await withAccountAuth(
           { account, forceLock, restorePreviousAuth: true },
-          async () => await fetchRateLimitsViaRpc(),
+          async () => await fetchLiveLimits(provider),
         );
-        await setCachedLimits(account, snapshot);
-        rows.push(rateLimitsToRow(snapshot, account, "live"));
-        results.push({ account, source: "live", snapshot });
+        await setCachedLimits(account, live.snapshot, live.source);
+        rows.push(rateLimitsToRow(live.snapshot, account, live.source));
+        results.push({
+          account,
+          source: live.source,
+          provider: live.source === "live-api" ? "api" : "rpc",
+          snapshot: live.snapshot,
+        });
       } catch (error) {
         hadError = true;
         const message = toErrorMessage(error);
@@ -631,7 +677,7 @@ program
     }
     if (opts.json) {
       const payload: JsonEnvelope<{
-        results: Array<{ account: string; source: string; snapshot?: unknown; ageSec?: number }>;
+        results: Array<{ account: string; source: string; provider: LimitsProvider | "cached"; snapshot?: unknown; ageSec?: number }>;
         errors: Array<{ account: string; message: string }>;
       }> = {
         schemaVersion: 1,

@@ -27,8 +27,19 @@ describe("completion", () => {
     const res = await completeMulticodex({ words: ["multicodex", "limits", "--"], cword: 3, current: "--" });
     expect(res).toContain("--ttl");
     expect(res).toContain("--no-cache");
+    expect(res).toContain("--refresh");
+    expect(res).toContain("--provider");
     expect(res).toContain("--json");
     expect(res).toContain("--account");
+  });
+
+  test("suggests limits provider values", async () => {
+    const res = await completeMulticodex({
+      words: ["multicodex", "limits", "--provider", ""],
+      cword: 3,
+      current: "",
+    });
+    expect(res).toEqual(["api", "auto", "rpc"]);
   });
 
   test("suggests status flags", async () => {
