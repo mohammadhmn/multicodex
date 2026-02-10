@@ -94,7 +94,7 @@ final class UsageMenuViewModel: ObservableObject {
             return
         }
 
-        refresh(userInitiated: false, bypassCache: false)
+        refresh()
 
         refreshLoopTask = Task {
             while !Task.isCancelled {
@@ -107,10 +107,15 @@ final class UsageMenuViewModel: ObservableObject {
         }
     }
 
-    func refresh(userInitiated: Bool, bypassCache: Bool) {
-        let refreshLive = bypassCache
+    func refresh() {
         Task {
-            await performRefresh(refreshLive: refreshLive)
+            await performRefresh(refreshLive: false)
+        }
+    }
+
+    func refreshLive() {
+        Task {
+            await performRefresh(refreshLive: true)
         }
     }
 
@@ -159,7 +164,7 @@ final class UsageMenuViewModel: ObservableObject {
             defaults.set(trimmed, forKey: customNodePathKey)
             cli.customNodePath = trimmed
         }
-        refresh(userInitiated: true, bypassCache: false)
+        refresh()
     }
 
     func clearCustomNodePath() {

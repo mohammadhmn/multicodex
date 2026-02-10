@@ -1,180 +1,9 @@
 import Foundation
 
-struct CommandEnvelope<T: Decodable>: Decodable {
-    let schemaVersion: Int?
-    let command: String?
-    let ok: Bool
-    let data: T?
-    let error: CommandErrorPayload?
-}
-
-struct CommandErrorPayload: Decodable {
-    let message: String
-    let code: String?
-}
-
-struct AccountsListPayload: Decodable {
-    let accounts: [AccountEntry]
-    let currentAccount: String?
-}
-
-struct AccountEntry: Decodable, Identifiable {
-    let name: String
-    let isCurrent: Bool
-    let hasAuth: Bool
-    let lastUsedAt: String?
-    let lastLoginStatus: String?
-
-    var id: String { name }
-}
-
-struct LimitsPayload: Decodable {
-    let results: [LimitsResult]
-    let errors: [LimitsErrorEntry]
-}
-
-struct LimitsResult: Decodable {
-    let account: String
-    let source: String
-    let snapshot: RateLimitSnapshot?
-    let ageSec: Int?
-}
-
-struct LimitsErrorEntry: Decodable {
-    let account: String
-    let message: String
-}
-
-struct RateLimitSnapshot: Decodable {
-    let primary: RateLimitWindow?
-    let secondary: RateLimitWindow?
-    let credits: CreditsSnapshot?
-}
-
-struct RateLimitWindow: Decodable, Equatable {
-    let usedPercent: Double?
-    let windowDurationMins: Int?
-    let resetsAt: Double?
-}
-
-struct CreditsSnapshot: Decodable {
-    let hasCredits: Bool?
-    let unlimited: Bool?
-    let balance: String?
-}
-
-enum PaceStatus: String {
-    case ahead
-    case onTrack = "on-track"
-    case behind
-
-    var label: String {
-        switch self {
-        case .ahead:
-            return "ahead"
-        case .onTrack:
-            return "on track"
-        case .behind:
-            return "behind"
-        }
-    }
-}
-
-enum ResetDisplayMode: String, CaseIterable {
-    case relative
-    case absolute
-
-    var buttonLabel: String {
-        switch self {
-        case .relative:
-            return "Reset: Relative"
-        case .absolute:
-            return "Reset: Absolute"
-        }
-    }
-
-    var next: Self {
-        switch self {
-        case .relative:
-            return .absolute
-        case .absolute:
-            return .relative
-        }
-    }
-}
-
-struct UsageMetric {
-    let label: String
-    let percentText: String
-    let usedPercent: Double?
-    let periodMinutes: Int?
-    let resetsAt: Date?
-    let paceStatus: PaceStatus?
-
-    var normalizedFraction: Double {
-        guard let usedPercent else {
-            return 0
-        }
-        return min(1, max(0, usedPercent / 100))
-    }
-
-    func resetText(mode: ResetDisplayMode) -> String {
-        UsageFormatter.resetText(for: resetsAt, mode: mode)
-    }
-}
-
-struct UsageSummary {
-    let fiveHour: UsageMetric
-    let weekly: UsageMetric
-    let credits: String
-}
-
-struct ProfileUsage: Identifiable {
-    let name: String
-    let isCurrent: Bool
-    let hasAuth: Bool
-    let lastUsedAt: String?
-    let lastLoginStatus: String?
-    let usage: UsageSummary
-    let source: String
-    let usageError: String?
-
-    var id: String { name }
-
-    var primaryPercentText: String? {
-        if usage.fiveHour.percentText != "-" {
-            return usage.fiveHour.percentText
-        }
-        if usage.weekly.percentText != "-" {
-            return usage.weekly.percentText
-        }
-        return nil
-    }
-
-    var lastLoginStatusPreview: String? {
-        guard let value = lastLoginStatus?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
-            return nil
-        }
-        let maxCount = 72
-        if value.count <= maxCount {
-            return value
-        }
-        let end = value.index(value.startIndex, offsetBy: maxCount)
-        return String(value[..<end]) + "..."
-    }
-
-    var lastUsedLabel: String {
-        guard let raw = lastUsedAt else {
-            return "never"
-        }
-        if let date = ISO8601DateFormatter().date(from: raw) {
-            return UsageFormatter.relativeDateFormatter.localizedString(for: date, relativeTo: Date())
-        }
-        return raw
-    }
-}
-
 enum UsageFormatter {
+    private static let fiveHourWindowMinutes = 300
+    private static let weeklyWindowMinutes = 10_080
+
     static let relativeDateFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .short
@@ -193,6 +22,24 @@ enum UsageFormatter {
         formatter.setLocalizedDateFormatFromTemplate("MMM d")
         return formatter
     }()
+
+    private static let isoDateParsers: [ISO8601DateFormatter] = {
+        let plain = ISO8601DateFormatter()
+
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        return [fractional, plain]
+    }()
+
+    static func parseISODate(_ raw: String) -> Date? {
+        for parser in isoDateParsers {
+            if let date = parser.date(from: raw) {
+                return date
+            }
+        }
+        return nil
+    }
 
     static func usageSummary(from snapshot: RateLimitSnapshot?) -> UsageSummary {
         guard let snapshot else {
@@ -242,16 +89,16 @@ enum UsageFormatter {
         var fiveHour: RateLimitWindow?
         var weekly: RateLimitWindow?
 
-        if primary?.windowDurationMins == 300 {
+        if primary?.windowDurationMins == fiveHourWindowMinutes {
             fiveHour = primary
         }
-        if secondary?.windowDurationMins == 300 {
+        if secondary?.windowDurationMins == fiveHourWindowMinutes {
             fiveHour = secondary
         }
-        if primary?.windowDurationMins == 10_080 {
+        if primary?.windowDurationMins == weeklyWindowMinutes {
             weekly = primary
         }
-        if secondary?.windowDurationMins == 10_080 {
+        if secondary?.windowDurationMins == weeklyWindowMinutes {
             weekly = secondary
         }
 
@@ -287,6 +134,7 @@ enum UsageFormatter {
         guard let value else {
             return "-"
         }
+
         let rounded = (value * 10.0).rounded() / 10.0
         if rounded.truncatingRemainder(dividingBy: 1) == 0 {
             return String(format: "%.0f%%", rounded)
@@ -304,10 +152,11 @@ enum UsageFormatter {
         if relative.lowercased().hasPrefix("in ") {
             return "Resets \(relative)"
         }
+
         return "Resets in \(relative)"
     }
 
-    private static func formatAbsoluteReset(_ resetDate: Date, now: Date) -> String {
+    private static func formatAbsoluteReset(_ resetDate: Date, now _: Date) -> String {
         let calendar = Calendar.current
         let timeText = resetTimeFormatter.string(from: resetDate)
 
@@ -348,7 +197,6 @@ enum UsageFormatter {
         if usedPercent <= 0 {
             return .ahead
         }
-
         if usedPercent >= 100 {
             return .behind
         }
@@ -374,6 +222,7 @@ enum UsageFormatter {
         guard let credits else {
             return "-"
         }
+
         if credits.unlimited == true {
             return "unlimited"
         }

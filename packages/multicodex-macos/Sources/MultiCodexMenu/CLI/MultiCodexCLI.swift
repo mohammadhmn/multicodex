@@ -1,9 +1,5 @@
 import Foundation
 
-struct SwitchAccountPayload: Decodable {
-    let currentAccount: String
-}
-
 final class MultiCodexCLI {
     private struct NodeRuntime {
         let executableURL: URL
