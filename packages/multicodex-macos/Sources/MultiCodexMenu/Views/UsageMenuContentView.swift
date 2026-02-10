@@ -5,115 +5,89 @@ struct UsageMenuContentView: View {
     @ObservedObject var viewModel: UsageMenuViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             header
 
-            if let error = viewModel.lastRefreshError {
-                errorBanner(error)
+            if let current = viewModel.currentProfile {
+                currentStrip(profile: current)
             }
 
-            quickSwitchStrip
-            profilesContent
+            if let error = viewModel.lastRefreshError {
+                errorBanner(message: error)
+            }
+
+            profilesList
+
             footer
         }
-        .padding(14)
+        .padding(12)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("MultiCodex")
-                        .font(.headline)
-                    Text(viewModel.subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("MultiCodex")
+                    .font(.headline)
 
-                Spacer()
-
-                HStack(spacing: 6) {
-                    Button {
-                        viewModel.refresh()
-                    } label: {
-                        Label("Refresh", systemImage: "arrow.clockwise")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(viewModel.isRefreshing)
-
-                    Button {
-                        viewModel.refreshLive()
-                    } label: {
-                        Label("Refresh Live", systemImage: "bolt.horizontal")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .disabled(viewModel.isRefreshing)
-                }
-            }
-
-            HStack {
                 Text(viewModel.lastUpdatedLabel)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+            }
 
-                if viewModel.isRefreshing {
-                    Spacer()
-                    ProgressView()
-                        .controlSize(.small)
+            Spacer()
+
+            HStack(spacing: 6) {
+                actionButton("Cache", systemImage: "arrow.clockwise", prominent: false) {
+                    viewModel.refresh()
+                }
+
+                actionButton("Live", systemImage: "bolt.horizontal.fill", prominent: true) {
+                    viewModel.refreshLive()
                 }
             }
         }
     }
 
-    private func errorBanner(_ message: String) -> some View {
-        Text(message)
-            .font(.caption)
-            .foregroundStyle(.red)
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.red.opacity(0.09), in: RoundedRectangle(cornerRadius: 8))
-    }
+    private func currentStrip(profile: ProfileUsage) -> some View {
+        HStack(spacing: 8) {
+            Text(profile.name)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
 
-    private var quickSwitchStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(viewModel.profiles) { profile in
-                    Button {
-                        viewModel.switchToProfile(named: profile.name)
-                    } label: {
-                        HStack(spacing: 5) {
-                            Text(profile.name)
-                            if profile.isCurrent {
-                                Image(systemName: "checkmark")
-                                    .font(.caption2.weight(.bold))
-                            }
-                        }
-                    }
-                    .buttonStyle(QuickProfileButtonStyle(isCurrent: profile.isCurrent))
-                    .disabled(viewModel.switchingProfileName != nil || profile.isCurrent)
-                }
-            }
+            Spacer(minLength: 8)
+
+            UsageValueChip(title: "5h", value: profile.usage.fiveHour.percentText)
+            UsageValueChip(title: "weekly", value: profile.usage.weekly.percentText)
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.accentColor.opacity(0.1))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.accentColor.opacity(0.22), lineWidth: 1)
+        )
     }
 
     @ViewBuilder
-    private var profilesContent: some View {
+    private var profilesList: some View {
         if viewModel.profiles.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("No profiles found")
+            VStack(alignment: .leading, spacing: 4) {
+                Text("No profiles")
                     .font(.subheadline.weight(.semibold))
-                Text("Run multicodex login to add an account, then refresh.")
+                Text("Run `multicodex login`, then refresh.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            .padding(12)
+            .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+            .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         } else {
             ScrollView {
-                LazyVStack(spacing: 10) {
+                LazyVStack(spacing: 8) {
                     ForEach(viewModel.profiles) { profile in
                         ProfileUsageCardView(
                             profile: profile,
@@ -124,41 +98,61 @@ struct UsageMenuContentView: View {
                     }
                 }
             }
-            .frame(minHeight: 240, maxHeight: 420)
+            .scrollIndicators(.hidden)
+            .frame(minHeight: 180, maxHeight: 320)
         }
     }
 
     private var footer: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Button(viewModel.resetDisplayMode.buttonLabel) {
-                    viewModel.toggleResetDisplayMode()
-                }
-                .buttonStyle(.plain)
-                .font(.caption)
-
-                Spacer()
-
-                Button("Config") {
-                    viewModel.openMulticodexConfigDirectory()
-                }
-                .buttonStyle(.plain)
-                .font(.caption)
-
-                Button("Settings") {
-                    openSettingsWindow()
-                }
-                .buttonStyle(.plain)
-                .font(.caption)
+        HStack(spacing: 10) {
+            Button(viewModel.resetDisplayMode.buttonLabel) {
+                viewModel.toggleResetDisplayMode()
             }
+            .buttonStyle(.plain)
+            .font(.caption)
 
-            if let hint = viewModel.cliResolutionHint {
-                Text(hint)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+            Spacer()
+
+            Button("Config") {
+                viewModel.openMulticodexConfigDirectory()
             }
+            .buttonStyle(.plain)
+            .font(.caption)
+
+            Button("Settings") {
+                openSettingsWindow()
+            }
+            .buttonStyle(.plain)
+            .font(.caption)
         }
+    }
+
+    private func errorBanner(message: String) -> some View {
+        Label(message, systemImage: "exclamationmark.triangle.fill")
+            .font(.caption)
+            .foregroundStyle(.red)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func actionButton(_ title: String, systemImage: String, prominent: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.caption.weight(.semibold))
+                .labelStyle(.titleAndIcon)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(prominent ? Color.accentColor.opacity(0.9) : Color.secondary.opacity(0.15))
+                )
+                .foregroundStyle(prominent ? Color.white : Color.primary)
+        }
+        .buttonStyle(.plain)
+        .disabled(viewModel.isRefreshing)
+        .opacity(viewModel.isRefreshing ? 0.7 : 1)
     }
 
     private func openSettingsWindow() {
@@ -169,18 +163,20 @@ struct UsageMenuContentView: View {
     }
 }
 
-private struct QuickProfileButtonStyle: ButtonStyle {
-    let isCurrent: Bool
+private struct UsageValueChip: View {
+    let title: String
+    let value: String
 
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
-            .background(
-                Capsule()
-                    .fill(isCurrent ? Color.accentColor.opacity(0.2) : Color.secondary.opacity(configuration.isPressed ? 0.2 : 0.12))
-            )
-            .foregroundStyle(isCurrent ? Color.accentColor : Color.primary)
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.weight(.semibold))
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .background(Color.primary.opacity(0.06), in: Capsule())
     }
 }

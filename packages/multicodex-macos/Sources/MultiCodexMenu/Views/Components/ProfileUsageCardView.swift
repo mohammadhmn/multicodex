@@ -9,35 +9,43 @@ struct ProfileUsageCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
-            metrics
-            details
-            statusMessage
+            metricRow
+            metadata
+            statusLine
         }
         .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(nsColor: .controlBackgroundColor))
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.primary.opacity(0.03))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(profile.isCurrent ? Color.accentColor.opacity(0.45) : Color.secondary.opacity(0.18), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(profile.isCurrent ? Color.accentColor.opacity(0.5) : Color.secondary.opacity(0.15), lineWidth: 1)
         )
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
-            Text(profile.name)
-                .font(.headline)
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(profile.name)
+                        .font(.headline)
 
-            if profile.isCurrent {
-                Text("Current")
-                    .font(.caption2.weight(.semibold))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(Color.accentColor.opacity(0.18), in: Capsule())
+                    if profile.isCurrent {
+                        statusBadge(text: "Current", tint: .accentColor)
+                    }
+
+                    if !profile.hasAuth {
+                        statusBadge(text: "Auth needed", tint: .orange)
+                    }
+                }
+
+                Text("Last used \(profile.lastUsedLabel)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
-            Spacer()
+            Spacer(minLength: 8)
 
             if !profile.isCurrent {
                 Button {
@@ -46,8 +54,10 @@ struct ProfileUsageCardView: View {
                     if isSwitching {
                         ProgressView()
                             .controlSize(.small)
+                            .frame(width: 48)
                     } else {
                         Text("Switch")
+                            .frame(minWidth: 48)
                     }
                 }
                 .buttonStyle(.borderedProminent)
@@ -57,62 +67,55 @@ struct ProfileUsageCardView: View {
         }
     }
 
-    private var metrics: some View {
-        HStack(spacing: 10) {
-            UsageMetricSummaryView(metric: profile.usage.fiveHour, resetDisplayMode: resetDisplayMode)
-            UsageMetricSummaryView(metric: profile.usage.weekly, resetDisplayMode: resetDisplayMode)
-            CreditsSummaryView(credits: profile.usage.credits)
+    private var metricRow: some View {
+        HStack(spacing: 8) {
+            CompactMetricTile(metric: profile.usage.fiveHour, resetDisplayMode: resetDisplayMode)
+            CompactMetricTile(metric: profile.usage.weekly, resetDisplayMode: resetDisplayMode)
         }
     }
 
-    private var details: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text("Source: \(profile.source)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Text("Last used: \(profile.lastUsedLabel)")
-                .font(.caption)
+    private var metadata: some View {
+        HStack(spacing: 10) {
+            Label(profile.source, systemImage: "clock.arrow.circlepath")
+                .font(.caption2)
                 .foregroundStyle(.secondary)
 
             if let status = profile.lastLoginStatusPreview {
                 Text(status)
-                    .font(.caption)
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(1)
             }
         }
     }
 
     @ViewBuilder
-    private var statusMessage: some View {
+    private var statusLine: some View {
         if let usageError = profile.usageError {
-            Text(usageError)
+            Label(usageError, systemImage: "xmark.octagon.fill")
                 .font(.caption)
                 .foregroundStyle(.red)
-        } else if !profile.hasAuth {
-            Text("Profile has no auth yet.")
-                .font(.caption)
-                .foregroundStyle(.orange)
         }
+    }
+
+    private func statusBadge(text: String, tint: Color) -> some View {
+        Text(text)
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(tint.opacity(0.15), in: Capsule())
+            .foregroundStyle(tint)
     }
 }
 
-private struct UsageMetricSummaryView: View {
+private struct CompactMetricTile: View {
     let metric: UsageMetric
     let resetDisplayMode: ResetDisplayMode
 
-    private var percentValue: Double {
-        metric.usedPercent ?? 0
-    }
-
-    private var barColor: Color {
-        if percentValue >= 95 {
-            return .red
-        }
-        if percentValue >= 80 {
-            return .orange
-        }
+    private var tone: Color {
+        let value = metric.usedPercent ?? 0
+        if value >= 95 { return .red }
+        if value >= 80 { return .orange }
         return .green
     }
 
@@ -120,15 +123,15 @@ private struct UsageMetricSummaryView: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text(metric.label)
-                    .font(.caption.weight(.semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text(metric.percentText)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.subheadline.weight(.bold))
             }
 
             ProgressView(value: metric.normalizedFraction)
-                .tint(barColor)
+                .tint(tone)
 
             Text(metric.resetText(mode: resetDisplayMode))
                 .font(.caption2)
@@ -136,39 +139,14 @@ private struct UsageMetricSummaryView: View {
                 .lineLimit(1)
 
             if let pace = metric.paceStatus {
-                Text("Pace: \(pace.label)")
+                Text(pace.label)
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(paceColor(for: pace))
+                    .foregroundStyle(tone)
+                    .lineLimit(1)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func paceColor(for pace: PaceStatus) -> Color {
-        switch pace {
-        case .ahead:
-            return .green
-        case .onTrack:
-            return .secondary
-        case .behind:
-            return .orange
-        }
-    }
-}
-
-private struct CreditsSummaryView: View {
-    let credits: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text("credits")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text(credits)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-            Spacer(minLength: 0)
-        }
-        .frame(width: 82, alignment: .leading)
+        .padding(8)
+        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
     }
 }

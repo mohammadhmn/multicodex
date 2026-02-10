@@ -7,7 +7,7 @@ struct MultiCodexMenuApp: App {
     var body: some Scene {
         MenuBarExtra {
             UsageMenuContentView(viewModel: viewModel)
-                .frame(minWidth: 420)
+                .frame(minWidth: 460, idealWidth: 500)
                 .onAppear {
                     viewModel.start()
                 }
