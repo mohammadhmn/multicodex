@@ -14,6 +14,7 @@ This repository is configured as a Bun workspace monorepo with Turborepo.
 - Typecheck across workspaces: `bun run typecheck`
 - Build across workspaces: `bun run build`
 - Run the macOS app only: `bun run --filter @multicodex/macos-app dev`
+- App-focused workflow commands: `cd packages/multicodex-macos && just list`
 
 ## Adding workspaces later
 

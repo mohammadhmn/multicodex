@@ -21,6 +21,7 @@ Requirements:
 - macOS 13+
 - Xcode 15+ (or Swift 5.9+ toolchain)
 - Node.js available on the machine (the app runs bundled `multicodex` via `node`)
+- `just` (recommended for local app workflow)
 
 From repo root:
 
@@ -35,6 +36,25 @@ With Bun workspaces / Turborepo:
 ```bash
 bun run build
 bun run --filter @multicodex/macos-app dev
+```
+
+## Common `just` commands
+
+From `packages/multicodex-macos`:
+
+```bash
+just list                 # show all recipes
+just doctor               # check swift/bun/node + sync bundled CLI
+just dev                  # package debug app and run it
+just build-debug          # debug build
+just build-release        # release build
+just package-app debug    # create build/dist/MultiCodexMenu.app
+just dist                 # package release app to build/dist/
+just dmg                  # create build/dist/MultiCodexMenu.dmg
+just install              # copy app to /Applications
+just logs                 # stream app logs
+just reset-settings       # clear app defaults domain
+just ci                   # doctor + build + test + typecheck
 ```
 
 ## Command resolution

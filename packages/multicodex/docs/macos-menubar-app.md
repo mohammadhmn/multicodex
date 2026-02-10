@@ -31,3 +31,4 @@ swift run MultiCodexMenu
 - The app auto-refreshes every 60 seconds.
 - The app bundles the `multicodex` CLI JS and runs it via Node.
 - If Node is not auto-detected, use `Choose Node…` from the menu to point to your Node executable.
+- Local app workflow is available via `packages/multicodex-macos/justfile` (`just doctor`, `just dev`, `just dist`, `just dmg`, etc).
