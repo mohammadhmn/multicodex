@@ -54,6 +54,7 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # === Caches ===
 .cache/
 .eslintcache
+.turbo/
 
 # === IDEs & Editors ===
 .idea/
@@ -64,6 +65,3 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # === Python ===
 __pycache__/
 *.pyc
-
-# === Local Artifacts ===
-packages/
