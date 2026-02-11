@@ -59,6 +59,76 @@ final class MultiCodexCLI {
         throw makeCommandError(from: envelope, fallback: "Failed to switch account to \(name).")
     }
 
+    func addAccount(name: String) async throws -> AddAccountPayload {
+        let envelope: CommandEnvelope<AddAccountPayload> = try await runEnvelope(arguments: ["accounts", "add", name, "--json"])
+        if let data = envelope.data {
+            return data
+        }
+        throw makeCommandError(from: envelope, fallback: "Failed to add account \(name).")
+    }
+
+    func removeAccount(name: String, deleteData: Bool) async throws -> RemoveAccountPayload {
+        var args = ["accounts", "remove", name, "--json"]
+        if deleteData {
+            args.insert("--delete-data", at: 3)
+        }
+
+        let envelope: CommandEnvelope<RemoveAccountPayload> = try await runEnvelope(arguments: args)
+        if let data = envelope.data {
+            return data
+        }
+        throw makeCommandError(from: envelope, fallback: "Failed to remove account \(name).")
+    }
+
+    func renameAccount(from oldName: String, to newName: String) async throws -> RenameAccountPayload {
+        let envelope: CommandEnvelope<RenameAccountPayload> = try await runEnvelope(arguments: ["accounts", "rename", oldName, newName, "--json"])
+        if let data = envelope.data {
+            return data
+        }
+        throw makeCommandError(from: envelope, fallback: "Failed to rename account \(oldName).")
+    }
+
+    func importDefaultAuth(into name: String) async throws -> ImportAccountPayload {
+        let envelope: CommandEnvelope<ImportAccountPayload> = try await runEnvelope(arguments: ["accounts", "import", name, "--json"])
+        if let data = envelope.data {
+            return data
+        }
+        throw makeCommandError(from: envelope, fallback: "Failed to import auth for \(name).")
+    }
+
+    func fetchStatus(name: String) async throws -> AccountStatusPayload {
+        let envelope: CommandEnvelope<AccountStatusPayload> = try await runEnvelope(arguments: ["status", name, "--json"])
+        if let data = envelope.data {
+            return data
+        }
+        throw makeCommandError(from: envelope, fallback: "Failed to check login status for \(name).")
+    }
+
+    func openLoginInTerminal(account name: String) throws {
+        let command = try makeShellCommand(arguments: ["run", name, "--", "login"])
+        let escapedCommand = command
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = [
+            "-e", "tell application \"Terminal\" to activate",
+            "-e", "tell application \"Terminal\" to do script \"\(escapedCommand)\"",
+        ]
+
+        do {
+            try process.run()
+        } catch {
+            throw MultiCodexCLIError(message: "Could not open Terminal for login: \(error.localizedDescription)")
+        }
+
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw MultiCodexCLIError(message: "Could not launch Terminal login session (exit \(process.terminationStatus)).")
+        }
+    }
+
     private func runEnvelope<T: Decodable>(arguments: [String]) async throws -> CommandEnvelope<T> {
         let result = try await run(arguments: arguments)
 
@@ -131,6 +201,15 @@ final class MultiCodexCLI {
         }
 
         return result
+    }
+
+    private func makeShellCommand(arguments: [String]) throws -> String {
+        let resolved = try resolveCommand()
+        let parts = [resolved.runtime.executableURL.path]
+            + resolved.runtime.prefixArguments
+            + [resolved.bundledCLIURL.path]
+            + arguments
+        return parts.map(shellQuote).joined(separator: " ")
     }
 
     private func resolveCommand() throws -> ResolvedCommand {
@@ -217,6 +296,14 @@ final class MultiCodexCLI {
             return MultiCodexCLIError(message: message)
         }
         return MultiCodexCLIError(message: fallback)
+    }
+
+    private func shellQuote(_ value: String) -> String {
+        if value.isEmpty {
+            return "''"
+        }
+        let escaped = value.replacingOccurrences(of: "'", with: "'\"'\"'")
+        return "'\(escaped)'"
     }
 }
 
