@@ -2,10 +2,10 @@
 
 This repository is configured as a Bun workspace monorepo with Turborepo.
 
-## Packages
+## Apps
 
-- `packages/multicodex`: `multicodex` CLI package.
-- `packages/multicodex-macos`: Native Swift macOS menu bar app.
+- `apps/cli`: `multicodex` CLI app workspace.
+- `apps/macos`: Native Swift macOS menu bar app workspace.
 
 ## Development
 
@@ -13,9 +13,9 @@ This repository is configured as a Bun workspace monorepo with Turborepo.
 - Run tests across workspaces: `bun run test`
 - Typecheck across workspaces: `bun run typecheck`
 - Build across workspaces: `bun run build`
-- Run the macOS app only: `bun run --filter @multicodex/macos-app dev`
-- App-focused workflow commands: `cd packages/multicodex-macos && just list`
+- Run the macOS app only: `bun run --filter macos dev`
+- App-focused workflow commands: `cd apps/macos && just list`
 
 ## Adding workspaces later
 
-Create a new folder under `packages/` with its own `package.json`. It will be included automatically by the root `workspaces` configuration.
+Create a new folder under `apps/` with its own `package.json`. It will be included automatically by the root `workspaces` configuration.

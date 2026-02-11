@@ -2,8 +2,8 @@
 
 ## Project Structure & Module Organization
 
-- `packages/`: Workspace packages.
-- `packages/multicodex/`: TypeScript source for the `multicodex` CLI.
+- `apps/`: Workspace apps.
+- `apps/cli/`: TypeScript source for the `multicodex` CLI.
   - `src/`: Core modules, CLI entry (`src/cli.ts`), auth swapping (`src/auth-swap.ts`), config (`src/config.ts`).
   - `test/`: Unit tests (`bun:test`).
   - `docs/`: User documentation.
@@ -17,12 +17,12 @@
 - `bun run test`: run unit tests across workspaces.
 - `bun run typecheck`: run TypeScript typechecking across workspaces.
 - `bun run build`: build all workspace packages.
-- `npm pack --workspace packages/multicodex`: preview npm tarball for the CLI package.
+- `npm pack --workspace apps/cli`: preview npm tarball for the CLI package.
 
 ## Coding Style & Naming Conventions
 
 - Language: TypeScript (ESM).
-- Prefer small, focused modules in `packages/multicodex/src/` with explicit exports.
+- Prefer small, focused modules in `apps/cli/src/` with explicit exports.
 - Naming:
   - files: `kebab-case.ts` for modules (e.g. `auth-swap.ts`)
   - functions: `camelCase`
@@ -33,14 +33,14 @@
 
 - Framework: `bun:test`.
 - Add tests for new behaviors and edge cases (flags, argument parsing, file I/O).
-- Test files live under `packages/multicodex/test/` and use `*.test.ts` naming.
+- Test files live under `apps/cli/test/` and use `*.test.ts` naming.
 
 ## Commit & Pull Request Guidelines
 
 - Commit messages follow Conventional Commits (examples in history: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`).
 - PRs should include:
   - a short description of the behavior change
-  - updated docs if CLI UX changes (`packages/multicodex/README.md`, `packages/multicodex/docs/`)
+  - updated docs if CLI UX changes (`apps/cli/README.md`, `apps/cli/docs/`)
   - tests for non-trivial logic changes
 
 ## Agent-Specific Instructions
