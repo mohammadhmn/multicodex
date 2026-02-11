@@ -8,46 +8,53 @@ struct MenuBarStatusLabelView: View {
     let hasError: Bool
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: symbolName)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(hasError ? .orange : .primary)
-
-            TrayUsageBarsView(
-                fiveHourFraction: fiveHourFraction,
-                weeklyFraction: weeklyFraction,
-                hasError: hasError
-            )
-
-            Text(title)
-                .font(.system(size: 12, weight: .semibold))
-                .lineLimit(1)
-        }
+        TrayMinimalStatusIconView(
+            symbolName: symbolName,
+            fiveHourFraction: fiveHourFraction,
+            weeklyFraction: weeklyFraction,
+            hasError: hasError
+        )
         .accessibilityLabel(title)
     }
 }
 
-private struct TrayUsageBarsView: View {
+private struct TrayMinimalStatusIconView: View {
+    let symbolName: String
     let fiveHourFraction: Double
     let weeklyFraction: Double
     let hasError: Bool
 
-    var body: some View {
-        HStack(spacing: 2) {
-            usageBar(fraction: weeklyFraction, color: .blue)
-            usageBar(fraction: fiveHourFraction, color: hasError ? .orange : .mint)
-        }
-        .frame(width: 10, height: 10)
+    private var tint: Color {
+        hasError ? .orange : .blue
     }
 
-    private func usageBar(fraction: Double, color: Color) -> some View {
-        ZStack(alignment: .bottom) {
-            Capsule()
-                .fill(Color.secondary.opacity(0.25))
-            Capsule()
-                .fill(color)
-                .frame(height: max(2, 10 * min(1, max(0, fraction))))
+    private var severityFraction: Double {
+        max(fiveHourFraction, weeklyFraction)
+    }
+
+    private var ringColor: Color {
+        if hasError {
+            return .orange
         }
-        .frame(width: 4, height: 10)
+        if severityFraction >= 0.95 {
+            return .red
+        }
+        if severityFraction >= 0.8 {
+            return .orange
+        }
+        return .secondary
+    }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.primary.opacity(0.08))
+            Circle()
+                .stroke(ringColor.opacity(0.9), lineWidth: 1.2)
+            Image(systemName: symbolName)
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundStyle(tint)
+        }
+        .frame(width: 15, height: 15)
     }
 }

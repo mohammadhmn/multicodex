@@ -3,6 +3,8 @@ import SwiftUI
 
 struct UsageMenuContentView: View {
     @ObservedObject var viewModel: UsageMenuViewModel
+    @Environment(\.openWindow) private var openWindow
+    private let maxVisibleProfiles = 6
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -86,20 +88,24 @@ struct UsageMenuContentView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         } else {
-            ScrollView {
-                LazyVStack(spacing: 8) {
-                    ForEach(viewModel.profiles) { profile in
-                        ProfileUsageCardView(
-                            profile: profile,
-                            resetDisplayMode: viewModel.resetDisplayMode,
-                            isSwitching: viewModel.switchingProfileName == profile.name,
-                            onSwitch: { viewModel.switchToProfile(named: profile.name) }
-                        )
-                    }
+            VStack(spacing: 8) {
+                ForEach(visibleProfiles) { profile in
+                    ProfileUsageCardView(
+                        profile: profile,
+                        resetDisplayMode: viewModel.resetDisplayMode,
+                        isSwitching: viewModel.switchingProfileName == profile.name,
+                        onSwitch: { viewModel.switchToProfile(named: profile.name) }
+                    )
+                }
+
+                if hiddenProfilesCount > 0 {
+                    Text("+\(hiddenProfilesCount) more profiles in Settings")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 2)
                 }
             }
-            .scrollIndicators(.hidden)
-            .frame(minHeight: 180, maxHeight: 320)
         }
     }
 
@@ -156,10 +162,17 @@ struct UsageMenuContentView: View {
     }
 
     private func openSettingsWindow() {
-        if !NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) {
-            _ = NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
-        }
+        NSApp.setActivationPolicy(.regular)
+        openWindow(id: "settings")
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private var visibleProfiles: [ProfileUsage] {
+        Array(viewModel.profiles.prefix(maxVisibleProfiles))
+    }
+
+    private var hiddenProfilesCount: Int {
+        max(0, viewModel.profiles.count - visibleProfiles.count)
     }
 }
 
