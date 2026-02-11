@@ -9,7 +9,11 @@ It provides:
 - Profile list from `multicodex accounts list --json`
 - Usage for all profiles from `multicodex limits --json`
 - One-click switching with `multicodex accounts use <name> --json`
-- Progress-card UI with pace indicators and reset timer modes inspired by CodexBar/OpenUsage
+- Settings UI for account/login management:
+  - add, rename, remove profiles
+  - import current auth into a profile
+  - run login status check for a profile
+  - launch Terminal login flow for a selected profile
 
 ## Build
 
