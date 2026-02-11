@@ -8,7 +8,16 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "test": "turbo test",
-    "typecheck": "turbo typecheck"
+    "typecheck": "turbo typecheck",
+    "macos:just:list": "cd packages/multicodex-macos && just list",
+    "macos:doctor": "cd packages/multicodex-macos && just doctor",
+    "macos:dev": "cd packages/multicodex-macos && just dev",
+    "macos:build:debug": "cd packages/multicodex-macos && just build-debug",
+    "macos:build:release": "cd packages/multicodex-macos && just build-release",
+    "macos:dist": "cd packages/multicodex-macos && just dist",
+    "macos:dmg": "cd packages/multicodex-macos && just dmg",
+    "macos:logs": "cd packages/multicodex-macos && just logs",
+    "macos:reset-settings": "cd packages/multicodex-macos && just reset-settings"
   },
   "devDependencies": {
     "turbo": "^2.5.6"
