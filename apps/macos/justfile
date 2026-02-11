@@ -11,43 +11,11 @@ default_bundle_id := "org.swift.swiftpm.macos.MultiCodex"
 app_iconset := "Assets/AppIcon.appiconset"
 app_icon_icns := "Assets/AppIcon.icns"
 
-default:
-    @just --list
-
-list:
-    @just --list
-
-doctor:
-    swift --version
-    bun --version
-    if command -v node >/dev/null 2>&1; then node --version; else echo "node not found in PATH (required at runtime)"; fi
+_bundle configuration:
+    if [[ "{{configuration}}" != "debug" && "{{configuration}}" != "release" ]]; then echo "Invalid configuration: {{configuration}} (use debug|release)"; exit 2; fi
     bun run sync:cli
-    just icon
-    test -f Sources/MultiCodexMenu/Resources/multicodex-cli.js
-    test -f "{{app_icon_icns}}"
-    @echo "doctor: bundled CLI resource is ready"
-
-sync-cli:
-    bun run sync:cli
-
-icon:
     bash scripts/generate-app-icon.sh "{{app_iconset}}" "{{app_icon_icns}}"
-
-build configuration="debug":
-    if [[ "{{configuration}}" != "debug" && "{{configuration}}" != "release" ]]; then echo "Invalid configuration: {{configuration}} (use debug|release)"; exit 2; fi
-    bun run sync:cli
     swift build -c "{{configuration}}"
-
-build-debug:
-    just build debug
-
-build-release:
-    just build release
-
-package-app configuration="debug":
-    if [[ "{{configuration}}" != "debug" && "{{configuration}}" != "release" ]]; then echo "Invalid configuration: {{configuration}} (use debug|release)"; exit 2; fi
-    just build "{{configuration}}"
-    just icon
     if [[ ! -x ".build/{{configuration}}/{{app_name}}" ]]; then echo "Expected executable not found: .build/{{configuration}}/{{app_name}}"; exit 1; fi
     if [[ ! -d ".build/{{configuration}}/{{resource_bundle}}" ]]; then echo "Expected resource bundle not found: .build/{{configuration}}/{{resource_bundle}}"; exit 1; fi
     if [[ ! -f "{{app_icon_icns}}" ]]; then echo "Expected icon not found: {{app_icon_icns}}"; exit 1; fi
@@ -74,31 +42,36 @@ package-app configuration="debug":
     cp "{{app_icon_icns}}" "{{app_bundle}}/Contents/Resources/AppIcon.icns"
     @echo "Created {{app_bundle}}"
 
-dist configuration="release":
-    just package-app "{{configuration}}"
+default:
+    @just list
 
-run configuration="debug":
-    just package-app "{{configuration}}"
+list:
+    @echo "Common commands:"
+    @echo "  just dev               Build + run debug app"
+    @echo "  just dmg               Build release DMG"
+    @echo "  just ci                Local CI checks"
+    @echo "  just doctor            Verify toolchain and bundled CLI"
+    @echo "  just release minor     Create/push macos-v tag"
+    @echo "  just kickoff-release   Patch bump + release tag"
+    @echo "  just clean             Clean build artifacts"
+
+doctor:
+    swift --version
+    bun --version
+    if command -v node >/dev/null 2>&1; then node --version; else echo "node not found in PATH (required at runtime)"; fi
+    bun run sync:cli
+    bash scripts/generate-app-icon.sh "{{app_iconset}}" "{{app_icon_icns}}"
+    test -f Sources/MultiCodexMenu/Resources/multicodex-cli.js
+    test -f "{{app_icon_icns}}"
+    @echo "doctor: bundled CLI resource is ready"
+
+dev:
+    just _bundle debug
     pkill -x "{{app_name}}" || true
     open "{{app_bundle}}"
 
-dev:
-    just run debug
-
-run-release:
-    just run release
-
-open-app configuration="debug":
-    just package-app "{{configuration}}"
-    open "{{app_bundle}}"
-
-clean:
-    swift package clean || true
-    swift package reset || true
-    if [[ -d "{{build_root}}" ]]; then find "{{build_root}}" -mindepth 1 -delete; fi
-
-dmg configuration="release":
-    just package-app "{{configuration}}"
+dmg:
+    just _bundle release
     mkdir -p "{{dist_dir}}" "{{dmg_staging}}"
     if [[ -d "{{dmg_staging}}" ]]; then find "{{dmg_staging}}" -mindepth 1 -delete; fi
     ditto "{{app_bundle}}" "{{dmg_staging}}/{{app_name}}.app"
@@ -106,28 +79,19 @@ dmg configuration="release":
     hdiutil create -volname "{{app_name}}" -srcfolder "{{dmg_staging}}" -ov -format UDZO "{{dmg_path}}"
     @echo "Created {{dmg_path}}"
 
-open-dmg:
-    just dmg release
-    open "{{dmg_path}}"
-
-install configuration="release":
-    just package-app "{{configuration}}"
-    ditto "{{app_bundle}}" "/Applications/{{app_name}}.app"
-
-logs:
-    log stream --style compact --predicate 'process == "{{app_name}}"'
-
-reset-settings bundle_id="{{default_bundle_id}}":
-    defaults delete "{{bundle_id}}" || true
-
 ci:
     just doctor
-    just build-debug
-    just test
-    just typecheck
-
-test:
+    swift build -c debug
     bun run test
-
-typecheck:
     bun run typecheck
+
+clean:
+    swift package clean || true
+    swift package reset || true
+    if [[ -d "{{build_root}}" ]]; then find "{{build_root}}" -mindepth 1 -delete; fi
+
+release version:
+    scripts/release.sh "{{version}}"
+
+kickoff-release version="patch":
+    scripts/release.sh --bump "{{version}}"
