@@ -66,3 +66,32 @@ struct CreditsSnapshot: Decodable {
 struct SwitchAccountPayload: Decodable {
     let currentAccount: String
 }
+
+struct AddAccountPayload: Decodable {
+    let account: String
+    let currentAccount: String?
+}
+
+struct RemoveAccountPayload: Decodable {
+    let removedAccount: String
+    let currentAccount: String?
+}
+
+struct RenameAccountPayload: Decodable {
+    let from: String
+    let to: String
+    let currentAccount: String?
+}
+
+struct ImportAccountPayload: Decodable {
+    let account: String
+}
+
+struct AccountStatusPayload: Decodable {
+    let account: String
+    let exitCode: Int
+    let stdout: String
+    let stderr: String
+    let output: String
+    let checkedAt: String
+}
