@@ -72,8 +72,7 @@ This workspace is released from the monorepo root via GitHub Actions.
 From repo root:
 
 ```bash
-git tag -a macos-v0.1.0 -m "macos-v0.1.0"
-git push origin macos-v0.1.0
+bun run release:macos -- --version 0.1.0
 ```
 
 ## Command resolution

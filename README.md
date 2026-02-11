@@ -23,17 +23,24 @@ This repository is configured as a Bun workspace monorepo with Turborepo.
 
 ### CLI release (npm)
 
-- Run the current CLI release helper:
-  - `bun run --filter cli release`
-- This keeps your current npm publishing behavior unchanged.
+- Streamlined root command:
+  - `bun run release:cli -- --minor`
+  - `bun run release:cli -- --version 0.2.0`
+- This calls the existing CLI release helper under `apps/cli`.
 
 ### macOS release (GitHub Releases)
 
-- Create and push a tag like `macos-v0.1.0`:
-  - `git tag -a macos-v0.1.0 -m "macos-v0.1.0"`
-  - `git push origin macos-v0.1.0`
+- Streamlined root command:
+  - `bun run release:macos -- --version 0.2.0`
 - Workflow: `.github/workflows/release-macos.yml`
 - Output artifact: `apps/macos/build/dist/MultiCodex.dmg` uploaded to the GitHub Release for that tag.
+
+### Release Both (CLI + macOS)
+
+- One command for both release tracks:
+  - `bun run release:both -- --version 0.2.0`
+- Optional: pass extra CLI-release flags after `--`:
+  - `bun run release:both -- --version 0.2.0 -- --no-publish`
 
 ## Adding workspaces later
 

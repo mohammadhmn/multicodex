@@ -1,8 +1,6 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 app_name := "MultiCodex"
-target_name := "MultiCodexMenu"
-package_name := "macos"
 resource_bundle := "macos_MultiCodexMenu.bundle"
 build_root := "build"
 dist_dir := "build/dist"
