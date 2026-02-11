@@ -1,0 +1,16 @@
+{
+  "name": "macos",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Native macOS menu bar app for multicodex",
+  "dependencies": {
+    "cli": "workspace:*"
+  },
+  "scripts": {
+    "sync:cli": "test -f ../cli/dist/cli.js || bun run --filter cli build; mkdir -p Sources/MultiCodexMenu/Resources; cp ../cli/dist/cli.js Sources/MultiCodexMenu/Resources/multicodex-cli.js",
+    "build": "bun run sync:cli && swift build",
+    "typecheck": "bun run sync:cli && swift build",
+    "test": "bun run sync:cli && swift build",
+    "dev": "bun run sync:cli && swift run MultiCodexMenu"
+  }
+}
