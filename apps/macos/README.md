@@ -72,6 +72,7 @@ This workspace is released from the monorepo root via GitHub Actions.
 From repo root:
 
 ```bash
+bun run release:macos
 bun run release:macos -- --version 0.1.0
 ```
 

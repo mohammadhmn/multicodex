@@ -23,14 +23,20 @@ This repository is configured as a Bun workspace monorepo with Turborepo.
 
 ### CLI release (npm)
 
-- Streamlined root command:
+- Simplest commands:
+  - `bun run release` (default patch)
+  - `bun run release:patch`
+  - `bun run release:minor`
+  - `bun run release:major`
+  - `bun run release -- --version 0.2.0`
+- Equivalent explicit command:
   - `bun run release:cli -- --minor`
-  - `bun run release:cli -- --version 0.2.0`
-- This calls the existing CLI release helper under `apps/cli`.
+- These call the CLI release helper under `apps/cli`.
 
 ### macOS release (GitHub Releases)
 
 - Streamlined root command:
+  - `bun run release:macos` (tags current CLI version)
   - `bun run release:macos -- --version 0.2.0`
 - Workflow: `.github/workflows/release-macos.yml`
 - Output artifact: `apps/macos/build/dist/MultiCodex.dmg` uploaded to the GitHub Release for that tag.
@@ -38,9 +44,13 @@ This repository is configured as a Bun workspace monorepo with Turborepo.
 ### Release Both (CLI + macOS)
 
 - One command for both release tracks:
-  - `bun run release:both -- --version 0.2.0`
-- Optional: pass extra CLI-release flags after `--`:
-  - `bun run release:both -- --version 0.2.0 -- --no-publish`
+  - `bun run release:both` (default patch release + matching macOS tag)
+  - `bun run release:both -- --minor`
+  - `bun run release:both -- --version 0.2.0 --no-push`
+  - `bun run release:both -- --version 0.2.0 --no-publish`
+- `--no-push` is handled by the root helper for the macOS tag push.
+- To pass CLI flags that clash with root flags, use passthrough after `--`:
+  - `bun run release:both -- --no-push -- --no-push`
 
 ## Adding workspaces later
 

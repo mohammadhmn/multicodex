@@ -4,9 +4,15 @@
 
 Use the release helper script. It bumps versions, runs checks, builds, and packs.
 
-From monorepo root, you can use:
+From monorepo root (recommended), use:
+- `bun run release` (default patch)
+- `bun run release:patch`
+- `bun run release:minor`
+- `bun run release:major`
+- `bun run release -- --version X.Y.Z`
 - `bun run release:cli -- --version X.Y.Z`
 
+From `apps/cli` workspace directly:
 - Patch release (default; commit + tag + push + publish): `bun run release`
 - Prep without publishing: `bun run release --no-publish`
 - Minor bump: `bun run release --minor`

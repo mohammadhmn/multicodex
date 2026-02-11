@@ -5,12 +5,11 @@ import { execSync } from "node:child_process";
 type Mode = "cli" | "macos" | "both";
 
 type MacosOptions = {
-  version: string;
+  version?: string;
   noPush: boolean;
 };
 
 type BothOptions = {
-  version: string;
   noPush: boolean;
   cliArgs: string[];
 };
@@ -20,16 +19,22 @@ const repoRoot = path.resolve(import.meta.dir, "..");
 function usage(exitCode: number): never {
   const msg = `
 Usage:
+  bun run release [cli-release-args...]
   bun run release:cli -- [cli-release-args...]
-  bun run release:macos -- --version <x.y.z> [--no-push]
-  bun run release:both -- --version <x.y.z> [--no-push] [-- <cli-release-args...>]
+  bun run release:macos -- [--version <x.y.z>] [--no-push]
+  bun run release:both -- [--no-push] [cli-release-args...]
 
 Examples:
   bun run release:cli
+  bun run release -- --minor
   bun run release:cli -- --minor
+  bun run release:patch
+  bun run release:macos
   bun run release:macos -- --version 0.2.0
-  bun run release:both -- --version 0.2.0
-  bun run release:both -- --version 0.2.0 -- --no-publish
+  bun run release:both
+  bun run release:both -- --minor --no-push
+  bun run release:both -- --version 0.2.0 --no-publish
+  bun run release:both -- --no-push -- --no-push
 `.trim();
 
   console.error(msg);
@@ -59,7 +64,7 @@ function isValidSemver(v: string): boolean {
   return /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(v);
 }
 
-function parseVersionArgs(args: string[]): MacosOptions {
+function parseMacosArgs(args: string[]): MacosOptions {
   let version: string | undefined;
   let noPush = false;
 
@@ -88,17 +93,28 @@ function parseVersionArgs(args: string[]): MacosOptions {
     throw new Error(`Unknown arg: ${arg}`);
   }
 
-  if (!version) throw new Error("--version is required");
-  if (!isValidSemver(version)) throw new Error(`Invalid semver: ${version}`);
+  if (version && !isValidSemver(version)) throw new Error(`Invalid semver: ${version}`);
   return { version, noPush };
 }
 
 function parseBothArgs(args: string[]): BothOptions {
   const separatorIndex = args.indexOf("--");
   const rootArgs = separatorIndex >= 0 ? args.slice(0, separatorIndex) : args;
-  const cliArgs = separatorIndex >= 0 ? args.slice(separatorIndex + 1) : [];
-  const { version, noPush } = parseVersionArgs(rootArgs);
-  return { version, noPush, cliArgs };
+  const passthroughCliArgs = separatorIndex >= 0 ? args.slice(separatorIndex + 1) : [];
+
+  const cliArgs: string[] = [];
+  let noPush = false;
+
+  for (const arg of rootArgs) {
+    if (arg === "--help" || arg === "-h") usage(0);
+    if (arg === "--no-push") {
+      noPush = true;
+      continue;
+    }
+    cliArgs.push(arg);
+  }
+
+  return { noPush, cliArgs: [...cliArgs, ...passthroughCliArgs] };
 }
 
 function hasLocalTag(tagName: string): boolean {
@@ -152,10 +168,13 @@ function wantsHelp(args: string[]): boolean {
 }
 
 async function main(): Promise<void> {
-  const [modeRaw, ...rest] = process.argv.slice(2);
-  if (!modeRaw || modeRaw === "--help" || modeRaw === "-h") usage(0);
+  const argv = process.argv.slice(2);
+  if (argv[0] === "--help" || argv[0] === "-h") usage(0);
 
-  const mode = modeRaw as Mode;
+  const first = argv[0];
+  const modes = new Set<Mode>(["cli", "macos", "both"]);
+  const mode: Mode = first && modes.has(first as Mode) ? (first as Mode) : "cli";
+  const rest = mode === "cli" && first && !modes.has(first as Mode) ? argv : argv.slice(1);
 
   if (mode === "cli") {
     releaseCli(rest);
@@ -163,14 +182,15 @@ async function main(): Promise<void> {
   }
 
   if (mode === "macos") {
-    const { version, noPush } = parseVersionArgs(rest);
-    createMacosTag(version, noPush);
+    const { version, noPush } = parseMacosArgs(rest);
+    const finalVersion = version ?? await readCliVersion();
+    createMacosTag(finalVersion, noPush);
     return;
   }
 
   if (mode === "both") {
-    const { version, noPush, cliArgs } = parseBothArgs(rest);
-    releaseCli(["--version", version, ...cliArgs]);
+    const { noPush, cliArgs } = parseBothArgs(rest);
+    releaseCli(cliArgs);
 
     // If CLI help was requested, skip creating/pushing a macOS tag.
     if (wantsHelp(cliArgs)) return;
