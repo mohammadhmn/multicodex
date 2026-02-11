@@ -1,28 +1,44 @@
 {
-  "name": "multicodex-monorepo",
-  "private": true,
-  "workspaces": [
-    "apps/*"
-  ],
+  "name": "multicodex",
+  "version": "0.2.1",
+  "description": "Multi-account wrapper for the Codex CLI",
+  "type": "module",
+  "license": "MIT",
+  "private": false,
   "scripts": {
-    "dev": "turbo dev",
-    "check": "bun run typecheck && bun run test && bun run build",
-    "build": "turbo build",
-    "test": "turbo test",
-    "typecheck": "turbo typecheck",
-    "release": "bun run --filter multicodex release",
-    "release:cli": "bun run --filter multicodex release",
-    "release:patch": "bun run --filter multicodex release --patch",
-    "release:minor": "bun run --filter multicodex release --minor",
-    "release:major": "bun run --filter multicodex release --major",
-    "release:plan": "bun run --filter multicodex release --dry-run",
-    "release:macos": "cd apps/macos && scripts/release.sh --bump patch",
-    "macos:dev": "cd apps/macos && just dev",
-    "macos:dmg": "cd apps/macos && just dmg",
-    "macos:ci": "cd apps/macos && just ci"
+    "dev": "bun run src/cli.ts",
+    "build": "bun build --target=node --format=esm --outfile dist/cli.js src/cli.ts && bun run scripts/postbuild.ts",
+    "prepublishOnly": "bun run build",
+    "test": "bun test",
+    "typecheck": "node ./node_modules/typescript/lib/tsc.js -p tsconfig.json --noEmit",
+    "release": "bun run scripts/release.ts"
   },
+  "bin": {
+    "multicodex": "dist/cli.js",
+    "mcodex": "dist/cli.js"
+  },
+  "files": [
+    "dist/cli.js",
+    "README.md",
+    "CODE_OF_CONDUCT.md",
+    "CONTRIBUTING.md",
+    "docs/",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "codex",
+    "cli",
+    "openai",
+    "multi-account"
+  ],
   "devDependencies": {
-    "turbo": "^2.5.6"
+    "@types/bun": "latest",
+    "typescript": "^5.9.3"
   },
-  "packageManager": "bun@1.3.9"
+  "dependencies": {
+    "commander": "^14.0.3"
+  }
 }
