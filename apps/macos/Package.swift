@@ -7,7 +7,7 @@ let package = Package(
         .macOS(.v13),
     ],
     products: [
-        .executable(name: "MultiCodexMenu", targets: ["MultiCodexMenu"]),
+        .executable(name: "MultiCodex", targets: ["MultiCodexMenu"]),
     ],
     targets: [
         .executableTarget(
