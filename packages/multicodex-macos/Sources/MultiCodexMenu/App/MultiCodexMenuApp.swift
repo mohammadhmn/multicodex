@@ -24,5 +24,11 @@ struct MultiCodexMenuApp: App {
                 .padding(16)
                 .frame(width: 640)
         }
+
+        WindowGroup("Settings", id: "settings-window") {
+            SettingsContentView(viewModel: viewModel)
+                .padding(16)
+                .frame(minWidth: 680, minHeight: 760)
+        }
     }
 }
