@@ -19,40 +19,38 @@ This repository is configured as a Bun workspace monorepo with Turborepo.
 - Run macOS checks: `bun run macos:ci`
 - For advanced app-only commands, use `apps/macos/justfile` directly.
 
-## Release Strategy (Monorepo)
+## Release Strategy
 
-- CLI (`apps/cli`) continues to publish to npm using the existing local flow (`bun run --filter multicodex release`).
-- macOS app (`apps/macos`) is released via GitHub Actions on tags that match `macos-v*`.
+CLI and macOS now have separate release flows.
 
 ### CLI release (npm)
 
-- Simplest commands:
-  - `bun run release:cli` (default patch)
-  - `bun run release:plan` (dry run; no git/npm changes)
-  - `bun run release:patch`
-  - `bun run release:minor`
-  - `bun run release:major`
-  - `bun run release:cli -- --version 0.2.0`
-- These call the CLI release helper under `apps/cli`.
+Use the same CLI release flow from before the monorepo split:
+
+- `bun run release` (default patch)
+- `bun run release:cli`
+- `bun run release:plan` (dry run; no git/npm changes)
+- `bun run release:patch`
+- `bun run release:minor`
+- `bun run release:major`
+- `bun run release:cli -- --version 0.2.0`
+
+These call `apps/cli/scripts/release.ts`.
 
 ### macOS release (GitHub Releases)
 
-- Streamlined root command:
-  - `bun run release:macos` (tags current CLI version)
-  - `bun run release:macos -- --version 0.2.0`
-- Workflow: `.github/workflows/release-macos.yml`
-- Output artifact: `apps/macos/build/dist/MultiCodex.dmg` uploaded to the GitHub Release for that tag.
+Create a macOS tag and let GitHub Actions build/upload the DMG:
 
-### Release Both (CLI + macOS)
+- From root: `bun run release:macos` (patch bump)
+- From app dir: `cd apps/macos && just kickoff-release`
+- Explicit tag: `cd apps/macos && just release macos-v0.1.0`
+- Explicit bump: `cd apps/macos && just release minor`
 
-- One command for both release tracks:
-  - `bun run release` (default patch release + matching macOS tag)
-  - `bun run release -- --minor`
-  - `bun run release -- --version 0.2.0 --no-push`
-  - `bun run release -- --version 0.2.0 --no-publish`
-- `--no-push` is handled by the root helper for the macOS tag push.
-- To pass CLI flags that clash with root flags, use passthrough after `--`:
-  - `bun run release -- --no-push -- --no-push`
+Workflow: `.github/workflows/release-macos.yml`  
+Tag format: `macos-vMAJOR.MINOR.PATCH`  
+Artifact: `apps/macos/build/dist/MultiCodex.dmg`
+
+The macOS build always rebuilds and bundles the CLI from `apps/cli` for the tagged commit.
 
 ## Adding workspaces later
 

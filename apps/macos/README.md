@@ -46,35 +46,37 @@ bun run --filter macos dev
 From `apps/macos`:
 
 ```bash
-just list                 # show all recipes
+just list                 # show the streamlined command set
 just doctor               # check swift/bun/node + sync bundled CLI
-just icon                 # generate icon PNGs + AppIcon.icns from Assets/AppIcon.appiconset/icon-master.svg
 just dev                  # package debug app and run it
-just build-debug          # debug build
-just build-release        # release build
-just package-app debug    # create build/dist/MultiCodex.app
-just dist                 # package release app to build/dist/
 just dmg                  # create build/dist/MultiCodex.dmg
-just install              # copy app to /Applications
-just logs                 # stream app logs
-just reset-settings       # clear app defaults domain
 just ci                   # doctor + build + test + typecheck
+just clean                # remove build artifacts
 ```
 
 ## GitHub release (DMG)
 
-This workspace is released from the monorepo root via GitHub Actions.
+This app has its own release flow (separate from CLI npm release).
 
 - Workflow: `/Users/mohamadhosein/Workspace/utilities/multicodex/.github/workflows/release-macos.yml`
 - Trigger tag format: `macos-vMAJOR.MINOR.PATCH` (example: `macos-v0.1.0`)
 - Release artifact: `MultiCodex.dmg`
 
-From repo root:
+From `apps/macos`:
+
+```bash
+just kickoff-release           # patch bump and push tag
+just release minor             # bump from latest macos-v tag
+just release macos-v0.1.0      # explicit version
+```
+
+From repo root (shortcut):
 
 ```bash
 bun run release:macos
-bun run release:macos -- --version 0.1.0
 ```
+
+Note: packaging always rebuilds and bundles the CLI from `apps/cli` for the tagged commit.
 
 ## Command resolution
 

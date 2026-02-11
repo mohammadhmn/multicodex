@@ -4,7 +4,7 @@
 
 Use the release helper script. It bumps versions, runs checks, builds, and packs.
 
-From monorepo root (recommended), use:
+From monorepo root, use:
 - `bun run release:cli` (default patch)
 - `bun run release:plan` (dry run)
 - `bun run release:patch`
@@ -21,9 +21,9 @@ From `apps/cli` workspace directly:
 - Full release (explicit version): `bun run release --version X.Y.Z`
 
 Monorepo note:
+- CLI and macOS releases are intentionally separate flows.
 - CLI tags remain `vX.Y.Z`.
-- macOS app releases use a separate tag namespace: `macos-vX.Y.Z`.
-- Keeping separate prefixes avoids accidental cross-release triggers.
+- macOS tags use `macos-vX.Y.Z`.
 
 Notes:
 - The script refuses to run if `git status` is not clean.
