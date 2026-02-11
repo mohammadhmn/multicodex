@@ -10,11 +10,14 @@ This repository is configured as a Bun workspace monorepo with Turborepo.
 ## Development
 
 - Install dependencies: `bun install`
+- Run the full quality gate: `bun run check`
 - Run tests across workspaces: `bun run test`
 - Typecheck across workspaces: `bun run typecheck`
 - Build across workspaces: `bun run build`
-- Run the macOS app only: `bun run --filter macos dev`
-- App-focused workflow commands: `cd apps/macos && just list`
+- Run the macOS app: `bun run macos:dev`
+- Build macOS DMG: `bun run macos:dmg`
+- Run macOS checks: `bun run macos:ci`
+- For advanced app-only commands, use `apps/macos/justfile` directly.
 
 ## Release Strategy (Monorepo)
 
@@ -24,13 +27,12 @@ This repository is configured as a Bun workspace monorepo with Turborepo.
 ### CLI release (npm)
 
 - Simplest commands:
-  - `bun run release` (default patch)
+  - `bun run release:cli` (default patch)
+  - `bun run release:plan` (dry run; no git/npm changes)
   - `bun run release:patch`
   - `bun run release:minor`
   - `bun run release:major`
-  - `bun run release -- --version 0.2.0`
-- Equivalent explicit command:
-  - `bun run release:cli -- --minor`
+  - `bun run release:cli -- --version 0.2.0`
 - These call the CLI release helper under `apps/cli`.
 
 ### macOS release (GitHub Releases)
@@ -44,13 +46,13 @@ This repository is configured as a Bun workspace monorepo with Turborepo.
 ### Release Both (CLI + macOS)
 
 - One command for both release tracks:
-  - `bun run release:both` (default patch release + matching macOS tag)
-  - `bun run release:both -- --minor`
-  - `bun run release:both -- --version 0.2.0 --no-push`
-  - `bun run release:both -- --version 0.2.0 --no-publish`
+  - `bun run release` (default patch release + matching macOS tag)
+  - `bun run release -- --minor`
+  - `bun run release -- --version 0.2.0 --no-push`
+  - `bun run release -- --version 0.2.0 --no-publish`
 - `--no-push` is handled by the root helper for the macOS tag push.
 - To pass CLI flags that clash with root flags, use passthrough after `--`:
-  - `bun run release:both -- --no-push -- --no-push`
+  - `bun run release -- --no-push -- --no-push`
 
 ## Adding workspaces later
 

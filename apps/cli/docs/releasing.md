@@ -5,15 +5,16 @@
 Use the release helper script. It bumps versions, runs checks, builds, and packs.
 
 From monorepo root (recommended), use:
-- `bun run release` (default patch)
+- `bun run release:cli` (default patch)
+- `bun run release:plan` (dry run)
 - `bun run release:patch`
 - `bun run release:minor`
 - `bun run release:major`
-- `bun run release -- --version X.Y.Z`
 - `bun run release:cli -- --version X.Y.Z`
 
 From `apps/cli` workspace directly:
 - Patch release (default; commit + tag + push + publish): `bun run release`
+- Dry run (no git/npm mutation): `bun run release --dry-run`
 - Prep without publishing: `bun run release --no-publish`
 - Minor bump: `bun run release --minor`
 - Major bump: `bun run release --major`
@@ -26,6 +27,7 @@ Monorepo note:
 
 Notes:
 - The script refuses to run if `git status` is not clean.
+- Release order is safe-by-default: commit -> publish -> tag -> push.
 - `npm publish` may prompt for verification (2FA / browser), depending on your npm setup.
 
 ## Manual Checklist (if needed)
