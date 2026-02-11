@@ -1,62 +1,131 @@
-# multicodex monorepo
+# multicodex
 
-This repository is a Bun workspace monorepo powered by Turborepo.
+[![npm version](https://img.shields.io/npm/v/multicodex)](https://www.npmjs.com/package/multicodex)
+[![license](https://img.shields.io/npm/l/multicodex)](LICENSE)
 
-## Workspace apps
+`multicodex` is a Node CLI wrapper around `codex` that adds multiple accounts (logins) and fast switching.
 
-- `apps/cli`: `multicodex` CLI (npm package)
-- `apps/macos`: Native SwiftUI macOS menu bar app
+It reuses your default Codex home (`~/.codex`) for everything (rules, skills, config, sessions, history, etc) and only switches accounts by swapping `~/.codex/auth.json` under a lock.
 
-See app-specific docs:
+See `docs/how-it-works.md` for implementation details.
 
-- `apps/cli/README.md`
-- `apps/macos/README.md`
+## Install
 
-## Quick start
+- Run without installing: `npx multicodex --help`
+- Install globally: `npm i -g multicodex`
 
-```bash
-bun install
-bun run check
-```
+Requirements:
 
-## Development commands
+- `codex` installed and available in `PATH` (`multicodex` shells out to it)
+- Node.js 18+
 
-- `bun run dev`: run workspace `dev` scripts through Turborepo
-- `bun run check`: typecheck + test + build across workspaces
-- `bun run test`: run tests across workspaces
-- `bun run typecheck`: run typechecks across workspaces
-- `bun run build`: build all workspaces
-- `bun run macos:dev`: run macOS app via `just dev`
-- `bun run macos:dmg`: build macOS DMG
-- `bun run macos:ci`: run macOS checks
+Binary names:
 
-## Release strategy
+- `multicodex`
+- `mcodex` (alias)
 
-CLI and macOS release independently.
+## Usage
 
-### CLI release (npm)
+Create accounts:
 
-- `bun run release` (default patch bump)
-- `bun run release:cli`
-- `bun run release:plan` (dry-run; no git or npm changes)
-- `bun run release:patch`
-- `bun run release:minor`
-- `bun run release:major`
-- `bun run release:cli -- --version 0.2.0`
+- `multicodex accounts add work`
+- `multicodex accounts add personal`
 
-All commands call `apps/cli/scripts/release.ts`.
+Login per account (stores per-account auth snapshots):
 
-### macOS release (GitHub Releases)
+- `multicodex run work -- codex login`
+- `multicodex run personal -- codex login`
 
-- Root shortcut: `bun run release:macos`
-- From `apps/macos`: `just kickoff-release`
-- Explicit version tag: `cd apps/macos && just release macos-v0.1.0`
-- Explicit bump type: `cd apps/macos && just release minor`
+Switch default account:
 
-Details:
+- `multicodex accounts use work`
 
-- Workflow: `.github/workflows/release-macos.yml`
-- Tag format: `macos-vMAJOR.MINOR.PATCH`
-- Output artifact: `apps/macos/build/dist/MultiCodex.dmg`
+Run Codex using current account:
 
-The macOS packaging flow always rebuilds and bundles the CLI from `apps/cli` for the tagged commit.
+- `multicodex codex` (interactive)
+- `multicodex codex -m o3 "do the thing"` (passthrough)
+
+Run a one-off command without switching your default login:
+
+- `multicodex run personal --temp -- codex login status`
+
+See accounts at a glance:
+
+- `multicodex accounts` (alias: `multicodex ls`)
+
+Usage limits (via Codex app-server RPC):
+
+- `multicodex limits` (all accounts)
+- `multicodex limits work`
+
+Notes: results are cached for 300 seconds by default. Use `--no-cache` or `--ttl <seconds>`.
+
+## JSON output (for apps/automation)
+
+Most account management commands support `--json` for machine-readable output on stdout.
+
+Examples:
+
+- `multicodex accounts list --json`
+- `multicodex accounts current --json`
+- `multicodex use work --json`
+- `multicodex limits --json`
+
+## Autocomplete
+
+Bash:
+
+- `multicodex completion bash > ~/.multicodex-completion.bash`
+- Add to `~/.bashrc`: `source ~/.multicodex-completion.bash`
+
+Zsh:
+
+- `multicodex completion zsh > ~/.multicodex-completion.zsh`
+- Add to `~/.zshrc`:
+  - `autoload -Uz compinit && compinit`
+  - `source ~/.multicodex-completion.zsh`
+- Or install to fpath: `multicodex completion zsh --install`
+
+Fish:
+
+- `multicodex completion fish > ~/.config/fish/completions/multicodex.fish`
+
+## Development
+
+- Install deps: `bun install`
+- Typecheck: `bun run typecheck`
+- Tests: `bun run test`
+- Build: `bun run build`
+
+Architecture notes:
+
+- `docs/architecture.md`
+
+## Publish
+
+- `bun run build`
+- `npm publish`
+
+Or use the release helper:
+
+- `bun run release`
+
+## Contributing
+
+See `CONTRIBUTING.md`.
+
+## Storage
+
+Default root: `~/.config/multicodex` (override with `MULTICODEX_HOME`).
+
+Per-account auth snapshots:
+
+- `~/.config/multicodex/accounts/<name>/auth.json`
+
+Lock:
+
+- `~/.config/multicodex/locks/auth.lockdir`
+
+Codex home (unchanged):
+
+- `~/.codex` (multicodex only touches `~/.codex/auth.json`)

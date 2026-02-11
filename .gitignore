@@ -1,50 +1,32 @@
-# === Node.js ===
+# Node / Bun
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# === Bun ===
+# Bun lock artifact variant
 bun.lockb
 
-# === Build Output ===
-dist/
-out/
-build/
+# Build output
+/dist
+/out
+/build
 *.tgz
 
-# === TypeScript ===
+# TypeScript
 *.tsbuildinfo
 
-# === Swift / Xcode / macOS ===
-# Build artifacts
-.build/
-DerivedData/
-*.dmg
-
-# Xcode user-specific
-xcuserdata/
-*.xcuserstate
-*.xcscmblueprint
-
-# Swift Package Manager
-.swiftpm/
-apps/macos/Sources/MultiCodexMenu/Resources/multicodex-cli.js
-
-# macOS system
-.DS_Store
-
-# === Testing & Coverage ===
+# Testing / coverage
 coverage/
 *.lcov
 
-# === Logs ===
+# Logs
 logs/
 *.log
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
-# === Environment & Secrets ===
+# Env / secrets
 .env
 .env.local
 .env.development.local
@@ -52,17 +34,17 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 .env.production.local
 .env.*.local
 
-# === Caches ===
+# Caches
 .cache/
 .eslintcache
-.turbo/
 
-# === IDEs & Editors ===
+# OS / editors
+.DS_Store
 .idea/
 .vscode/
 .cursor/
 .run/
 
-# === Python ===
+# Python caches (occasionally used by local tooling)
 __pycache__/
 *.pyc
