@@ -2,22 +2,22 @@
   "name": "multicodex-monorepo",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "apps/*"
   ],
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
     "test": "turbo test",
     "typecheck": "turbo typecheck",
-    "macos:just:list": "cd packages/multicodex-macos && just list",
-    "macos:doctor": "cd packages/multicodex-macos && just doctor",
-    "macos:dev": "cd packages/multicodex-macos && just dev",
-    "macos:build:debug": "cd packages/multicodex-macos && just build-debug",
-    "macos:build:release": "cd packages/multicodex-macos && just build-release",
-    "macos:dist": "cd packages/multicodex-macos && just dist",
-    "macos:dmg": "cd packages/multicodex-macos && just dmg",
-    "macos:logs": "cd packages/multicodex-macos && just logs",
-    "macos:reset-settings": "cd packages/multicodex-macos && just reset-settings"
+    "macos:just:list": "cd apps/macos && just list",
+    "macos:doctor": "cd apps/macos && just doctor",
+    "macos:dev": "cd apps/macos && just dev",
+    "macos:build:debug": "cd apps/macos && just build-debug",
+    "macos:build:release": "cd apps/macos && just build-release",
+    "macos:dist": "cd apps/macos && just dist",
+    "macos:dmg": "cd apps/macos && just dmg",
+    "macos:logs": "cd apps/macos && just logs",
+    "macos:reset-settings": "cd apps/macos && just reset-settings"
   },
   "devDependencies": {
     "turbo": "^2.5.6"
