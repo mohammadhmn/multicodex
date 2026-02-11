@@ -7,14 +7,22 @@ Kickstart a new MultiCodex macOS release.
 
 Usage:
   scripts/release.sh --version <macos-vX.Y.Z>
+  scripts/release.sh --version <vX.Y.Z>
+  scripts/release.sh --version <X.Y.Z>
   scripts/release.sh --bump <major|minor|patch>
   scripts/release.sh <macos-vX.Y.Z>
+  scripts/release.sh <vX.Y.Z>
+  scripts/release.sh <X.Y.Z>
   scripts/release.sh <major|minor|patch>
 
 Examples:
   scripts/release.sh --version macos-v0.2.3
+  scripts/release.sh --version v0.2.3
+  scripts/release.sh --version 0.2.3
   scripts/release.sh --bump patch
   scripts/release.sh macos-v0.2.3
+  scripts/release.sh v0.2.3
+  scripts/release.sh 0.2.3
   scripts/release.sh patch
 USAGE
 }
@@ -113,17 +121,33 @@ next_version_from_bump() {
   echo "macos-v${major}.${minor}.${patch}"
 }
 
+normalize_version_input() {
+  local raw="$1"
+  if [[ "$raw" =~ ^macos-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "$raw"
+    return 0
+  fi
+  if [[ "$raw" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+    echo "macos-v${BASH_REMATCH[1]}"
+    return 0
+  fi
+  if [[ "$raw" =~ ^([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+    echo "macos-v${BASH_REMATCH[1]}"
+    return 0
+  fi
+  return 1
+}
+
 if [[ "$mode" == "version" ]]; then
-  if [[ ! "$input" =~ ^macos-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    echo "Error: --version must match macos-vMAJOR.MINOR.PATCH"
+  if ! version="$(normalize_version_input "$input")"; then
+    echo "Error: --version must match one of: macos-vMAJOR.MINOR.PATCH, vMAJOR.MINOR.PATCH, MAJOR.MINOR.PATCH"
     exit 1
   fi
-  version="$input"
 elif [[ "$mode" == "bump" ]]; then
   version="$(next_version_from_bump "$input")"
 else
-  if [[ "$input" =~ ^macos-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    version="$input"
+  if version="$(normalize_version_input "$input")"; then
+    :
   else
     version="$(next_version_from_bump "$input")"
   fi
