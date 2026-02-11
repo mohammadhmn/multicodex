@@ -24,15 +24,11 @@ private struct TrayMinimalStatusIconView: View {
     let weeklyFraction: Double
     let hasError: Bool
 
-    private var tint: Color {
-        hasError ? .orange : .blue
-    }
-
     private var severityFraction: Double {
         max(fiveHourFraction, weeklyFraction)
     }
 
-    private var ringColor: Color {
+    private var indicatorColor: Color {
         if hasError {
             return .orange
         }
@@ -46,15 +42,21 @@ private struct TrayMinimalStatusIconView: View {
     }
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(Color.primary.opacity(0.08))
-            Circle()
-                .stroke(ringColor.opacity(0.9), lineWidth: 1.2)
+        ZStack(alignment: .bottomTrailing) {
             Image(systemName: symbolName)
-                .font(.system(size: 8, weight: .semibold))
-                .foregroundStyle(tint)
+                .font(.system(size: 12, weight: .semibold))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.primary)
+
+            Circle()
+                .fill(indicatorColor)
+                .frame(width: 5, height: 5)
+                .overlay(
+                    Circle()
+                        .stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 1)
+                )
+                .offset(x: 1, y: 1)
         }
-        .frame(width: 15, height: 15)
+        .frame(width: 18, height: 14)
     }
 }
